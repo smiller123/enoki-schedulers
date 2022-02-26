@@ -1,2 +1,0 @@
-# bento-ghost
-
