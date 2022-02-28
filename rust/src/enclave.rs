@@ -9,7 +9,7 @@ use ::ghost::*;
 pub struct LocalEnclave {
     /* make this a real file pointer later */
     ctl_file: usize,
-    ghost: Ghost,
+    pub ghost: Ghost,
 }
 
 impl LocalEnclave {

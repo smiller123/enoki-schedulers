@@ -88,6 +88,12 @@ impl Ghost {
             flags: flags,
             mapsize: 0
         };
+        //let fd = 0;
+        println!("file {:?}", self.global_enc_file);
+        unsafe {
+        println!("ioctl {}", ffi::rs_GHOST_IOC_CREATE_QUEUE() as u32);
+        }
+        //println!("data ptr {:?}", &mut data as *mut c::ghost_ioc_create_queue);
         let fd = unsafe {
             c::vfs_ioctl(self.global_enc_file.unwrap() as *mut c::file, ffi::rs_GHOST_IOC_CREATE_QUEUE() as u32,
                          &mut data as *mut c::ghost_ioc_create_queue as u64)

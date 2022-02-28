@@ -38,8 +38,10 @@ impl bento::KernelModule for BentoGhostModule {
         let mut ghost = Ghost {
             global_enc_file: None,
         };
-        //let local_enclave = LocalEnclave::new(ghost);
-        Ok(BentoGhostModule{ local_enclave: LocalEnclave::new(ghost) })
+        let mut map_size = 0;
+        let local_enclave = LocalEnclave::new(ghost);
+        local_enclave.ghost.create_queue(1, 0, 0, &mut map_size);
+        Ok(BentoGhostModule{ local_enclave: local_enclave })
     }
 }
 
