@@ -128,12 +128,16 @@ pub extern "C" fn parse_message(type_: i32, msglen: i32, barrier: u32, payload: 
             let map = MAP.as_mut().unwrap();
             map.insert((*payload_data).pid, (*payload_data).cpu);
         }
-    *retval = 42;
+    //*retval = 42;
         if type_ == c::MSG_PNT as i32{
             let payload_data = payload as *const c::ghost_msg_payload_pnt;
-            *retval = TASK_ID as i32;
+            //*retval = TASK_ID as i32;
             //if let None = Q.as_mut() {
                 //println!("things are fucked\n");
+            //}
+            //if (*payload_data).cpu != 0 {
+            //    *retval = 0;
+            //    return;
             //}
             let q = Q.as_mut().unwrap();
             if let Some(pid) = q.pop_front() {
@@ -145,8 +149,11 @@ pub extern "C" fn parse_message(type_: i32, msglen: i32, barrier: u32, payload: 
                     *retval = pid as i32;
                     //println!("scheduling {} on {}, get {:?}", pid, (*payload_data).cpu, map.get(&pid));
                 } else {
+                    println!("can't schedule on other cpu\n");
                     q.push_front(pid);
                 }
+            } else {
+                *retval = 0;
             }
             TASK_ID = 0;
         }

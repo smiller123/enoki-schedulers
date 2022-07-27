@@ -7,7 +7,7 @@ main ()
     struct sched_param param;
     int pid_num = 0;
     char command[100];
-    strcpy(command, "perf bench sched messaging");
+    strcpy(command, "perf bench sched pipe");
 
     param.sched_priority = 0;
     sched_setscheduler(pid_num, 10, &param);
