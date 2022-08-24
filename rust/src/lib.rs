@@ -114,12 +114,35 @@ impl BentoScheduler for BentoSched {
 
                 *ret = pid as i32;
             } else {
-                println!("can't schedule on other cpu\n");
+                //println!("can't schedule on other cpu\n");
+                //println!("scheduling on other cpu\n");
+                //*ret = pid as i32;
                 q.push_front(pid);
             }
         } else {
             *ret = 0;
         }
+    }
+
+    fn select_task_rq(&self, pid: u64, retval: &mut i32) {
+        //println!("hitting select_task_rq");
+        let mut map = self.map.as_ref().unwrap().write();
+        if let Some(-1) = map.get(&pid) {
+            *retval = 0;
+        } else if let Some(cpu) = map.get(&pid) {
+            //println!("moving from cpu {} to cpu {}", *cpu, new_cpu);
+            *retval = *cpu;
+        } else {
+            *retval = 0;
+        }
+    }
+
+    fn migrate_task_rq(&self, pid: u64, new_cpu: i32) {
+        //println!("hitting migrate_task_rq pid {} to cpu {}", pid, new_cpu);
+    }
+
+    fn balance(&self) {
+        //println!("hitting balance");
     }
 }
 
