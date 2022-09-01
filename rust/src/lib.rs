@@ -115,8 +115,6 @@ impl BentoScheduler for BentoSched {
                 *ret = pid as i32;
             } else {
                 //println!("can't schedule on other cpu\n");
-                //println!("scheduling on other cpu\n");
-                //*ret = pid as i32;
                 q.push_front(pid);
             }
         } else {
@@ -125,24 +123,36 @@ impl BentoScheduler for BentoSched {
     }
 
     fn select_task_rq(&self, pid: u64, retval: &mut i32) {
-        //println!("hitting select_task_rq");
         let mut map = self.map.as_ref().unwrap().write();
-        if let Some(-1) = map.get(&pid) {
-            *retval = 0;
-        } else if let Some(cpu) = map.get(&pid) {
-            //println!("moving from cpu {} to cpu {}", *cpu, new_cpu);
-            *retval = *cpu;
-        } else {
-            *retval = 0;
-        }
+        *retval = match map.get(&pid) {
+            None | Some(-1) => 1,
+            Some(cpu) => *cpu,
+        };
     }
 
     fn migrate_task_rq(&self, pid: u64, new_cpu: i32) {
         //println!("hitting migrate_task_rq pid {} to cpu {}", pid, new_cpu);
     }
 
-    fn balance(&self) {
-        //println!("hitting balance");
+    fn balance(&self, cpu: i32) {
+        //if cpu != 1 {
+        //    return;
+        //}
+        //let q = self.q.as_ref().unwrap().read();
+        //let mut next = &0;
+        //if let Some(opt) = q.front() {
+        //    next = opt;
+        //} else {
+        //    return;
+        //}
+        //let mut map = self.map.as_ref().unwrap().write();
+        //if let Some(0) = map.get(next) {
+        //    map.insert(*next, 1);
+        //    unsafe {
+        //        let next_pid = *next as u64;
+        //        let _output =  c::ghost_run_pid_on(next_pid, 0, 0, 1);
+        //    }
+        //}
     }
 }
 
