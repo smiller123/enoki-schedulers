@@ -31,6 +31,8 @@ use ghost::Ghost;
 use alloc::collections::vec_deque::VecDeque;
 use alloc::collections::btree_map::BTreeMap;
 
+use core::mem;
+
 pub struct BentoGhostModule {
 }
 
@@ -40,9 +42,14 @@ pub struct BentoSched {
     map: Option<RwLock<BTreeMap<u64, i32>>>,
 }
 
+pub struct UpgradeData {
+    q: Option<RwLock<VecDeque<u64>>>,
+    map: Option<RwLock<BTreeMap<u64, i32>>>
+}
+
 pub static mut BENTO_SCHED: BentoSched = BentoSched {
     q: None,
-    map: None
+    map: None,
 };
 
 impl bento::KernelModule for BentoGhostModule {
@@ -58,7 +65,7 @@ impl bento::KernelModule for BentoGhostModule {
     }
 }
 
-impl BentoScheduler for BentoSched {
+impl BentoScheduler<UpgradeData, UpgradeData> for BentoSched {
     fn get_policy(&self) -> i32 {
         10
     }
@@ -153,6 +160,23 @@ impl BentoScheduler for BentoSched {
         //        let _output =  c::ghost_run_pid_on(next_pid, 0, 0, 1);
         //    }
         //}
+    }
+
+    fn reregister_prepare(&mut self) -> Option<UpgradeData> {
+        let mut data = UpgradeData {
+            map: None,
+            q: None
+        };
+        mem::swap(&mut data.map, &mut self.map);
+        mem::swap(&mut data.q, &mut self.q);
+        return Some(data);
+    }
+
+    fn reregister_init(&mut self, data_opt: Option<UpgradeData>) {
+        if let Some(mut data) = data_opt {
+            mem::swap(&mut self.map, &mut data.map);
+            mem::swap(&mut self.q, &mut data.q);
+        }
     }
 }
 
