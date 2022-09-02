@@ -39,12 +39,12 @@ pub struct BentoGhostModule {
 #[repr(C)]
 pub struct BentoSched {
     q: Option<RwLock<VecDeque<u64>>>,
-    map: Option<RwLock<BTreeMap<u64, i32>>>,
+    map: Option<RwLock<BTreeMap<u64, u32>>>,
 }
 
 pub struct UpgradeData {
     q: Option<RwLock<VecDeque<u64>>>,
-    map: Option<RwLock<BTreeMap<u64, i32>>>
+    map: Option<RwLock<BTreeMap<u64, u32>>>
 }
 
 pub static mut BENTO_SCHED: BentoSched = BentoSched {
@@ -74,22 +74,21 @@ impl BentoScheduler<UpgradeData, UpgradeData> for BentoSched {
         if runnable > 0 {
             let mut q = self.q.as_ref().unwrap().write();
             q.push_back(pid);
-            let mut map = self.map.as_ref().unwrap().write();
-            map.insert(pid, -1);
+            //let mut map = self.map.as_ref().unwrap().write();
+            //map.insert(pid, -1);
         }
     }
 
-    fn task_wakeup(&self, pid: u64, _agent_data: u64, deferrable: i8,
+    fn task_wakeup(&self, pid: u64, _agent_data: u64, deferrable: bool,
                    _last_run_cpu: i32, wake_up_cpu: i32, _waker_cpu: i32) {
         let mut q = self.q.as_ref().unwrap().write();
         let mut map = self.map.as_ref().unwrap().write();
-        if deferrable == 0 {
-            q.push_front(pid);
-            map.insert(pid, wake_up_cpu);
-        } else {
+        if deferrable {
             q.push_back(pid);
-            map.insert(pid, wake_up_cpu);
+        } else {
+            q.push_front(pid);
         }
+        map.insert(pid, wake_up_cpu as u32);
     }
 
     fn task_preempt(&self, pid: u64, _runtime: u64, _cpu_seqnum: u64, cpu: i32,
@@ -97,7 +96,7 @@ impl BentoScheduler<UpgradeData, UpgradeData> for BentoSched {
         let mut q = self.q.as_ref().unwrap().write();
         q.push_back(pid);
         let mut map = self.map.as_ref().unwrap().write();
-        map.insert(pid, cpu);
+        map.insert(pid, cpu as u32);
     }
 
     fn task_blocked(&self, pid: u64, _runtime: u64, _cpu_seqnum: u64,
@@ -108,58 +107,58 @@ impl BentoScheduler<UpgradeData, UpgradeData> for BentoSched {
             q.remove(idx);
         }
         let mut map = self.map.as_ref().unwrap().write();
-        map.insert(pid, cpu);
+        map.insert(pid, cpu as u32);
     }
 
-    fn pick_next_task(&self, cpu: i32, ret: &mut i32) {
+    fn pick_next_task(&self, cpu: i32) -> Option<u64> {
         let mut q = self.q.as_ref().unwrap().write();
         if let Some(pid) = q.pop_front() {
             let map = self.map.as_ref().unwrap().read();
             if (map.get(&pid).is_none() ||
-                map.get(&pid) == Some(&-1) ||
-                map.get(&pid) == Some(&cpu)) {
+                map.get(&pid) == Some(&(cpu as u32))) {
 
-                *ret = pid as i32;
+                Some(pid)
             } else {
                 //println!("can't schedule on other cpu\n");
                 q.push_front(pid);
+                None
             }
         } else {
-            *ret = 0;
+            None
         }
     }
 
-    fn select_task_rq(&self, pid: u64, retval: &mut i32) {
+    fn select_task_rq(&self, pid: u64) -> i32 {
         let mut map = self.map.as_ref().unwrap().write();
-        *retval = match map.get(&pid) {
-            None | Some(-1) => 1,
-            Some(cpu) => *cpu,
-        };
+        //*map.get(&pid).unwrap_or(&1) as i32
+        match map.get(&pid) {
+            None => pid as i32 % 2,
+            Some(cpu) => *cpu as i32,
+        }
     }
 
     fn migrate_task_rq(&self, pid: u64, new_cpu: i32) {
         //println!("hitting migrate_task_rq pid {} to cpu {}", pid, new_cpu);
     }
 
-    fn balance(&self, cpu: i32) {
+    fn balance(&self, cpu: i32) -> Option<u64> {
         //if cpu != 1 {
-        //    return;
+        //    return None;
         //}
         //let q = self.q.as_ref().unwrap().read();
         //let mut next = &0;
         //if let Some(opt) = q.front() {
         //    next = opt;
         //} else {
-        //    return;
+        //    return None;
         //}
         //let mut map = self.map.as_ref().unwrap().write();
         //if let Some(0) = map.get(next) {
+        //    println!("shifting proc {} to cpu 1", *next);
         //    map.insert(*next, 1);
-        //    unsafe {
-        //        let next_pid = *next as u64;
-        //        let _output =  c::ghost_run_pid_on(next_pid, 0, 0, 1);
-        //    }
+        //    return Some(*next);
         //}
+        //return None;
     }
 
     fn reregister_prepare(&mut self) -> Option<UpgradeData> {
