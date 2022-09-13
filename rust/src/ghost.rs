@@ -81,12 +81,20 @@ impl Ghost {
         self.global_enc_file = Some(file as usize);
     }
 
-    pub fn create_queue(&self, elems: i32, node: i32, flags: i32, mapsize: &mut u64) -> i64 {
-        let mut data = c::ghost_ioc_create_queue {
+    pub fn create_queue(&self, elems: u32, node: u32, flags: u32, mapsize: &mut u64) -> i64 {
+        //let mut offsets = c::bento_ring_offsets {
+        //    head: 0,
+        //    tail: 0,
+        //    ring_mask: 0,
+        //    flags: 0,
+        //    dropped: 0,
+        //    array: 0
+        //};
+        let mut data = c::bento_ioc_create_queue {
             elems: elems,
-            node: node,
             flags: flags,
-            mapsize: 0
+            mapsize: 0,
+            //offsets: offsets
         };
         //let fd = 0;
         println!("file {:?}", self.global_enc_file);
@@ -96,7 +104,7 @@ impl Ghost {
         //println!("data ptr {:?}", &mut data as *mut c::ghost_ioc_create_queue);
         let fd = unsafe {
             c::vfs_ioctl(self.global_enc_file.unwrap() as *mut c::file, ffi::rs_GHOST_IOC_CREATE_QUEUE() as u32,
-                         &mut data as *mut c::ghost_ioc_create_queue as u64)
+                         &mut data as *mut c::bento_ioc_create_queue as u64)
         };
         *mapsize = data.mapsize;
         return fd;

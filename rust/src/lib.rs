@@ -33,6 +33,8 @@ use alloc::collections::btree_map::BTreeMap;
 
 use core::mem;
 
+use ringbuffer::RingBuffer;
+
 pub struct BentoGhostModule {
 }
 
@@ -40,6 +42,7 @@ pub struct BentoGhostModule {
 pub struct BentoSched {
     q: Option<RwLock<VecDeque<u64>>>,
     map: Option<RwLock<BTreeMap<u64, u32>>>,
+    user_q: Option<RwLock<Option<RingBuffer<UserMessage>>>>,
 }
 
 pub struct UpgradeData {
@@ -47,9 +50,15 @@ pub struct UpgradeData {
     map: Option<RwLock<BTreeMap<u64, u32>>>
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct UserMessage {
+    val: i32
+}
+
 pub static mut BENTO_SCHED: BentoSched = BentoSched {
     q: None,
     map: None,
+    user_q: None,
 };
 
 impl bento::KernelModule for BentoGhostModule {
@@ -58,6 +67,7 @@ impl bento::KernelModule for BentoGhostModule {
         unsafe {
         BENTO_SCHED.q = Some(RwLock::new(VecDeque::new()));
         BENTO_SCHED.map = Some(RwLock::new(BTreeMap::new()));
+        BENTO_SCHED.user_q = Some(RwLock::new(None));
         BENTO_SCHED.register();
         let this_mod = BentoGhostModule {};
         Ok(this_mod)
@@ -65,7 +75,7 @@ impl bento::KernelModule for BentoGhostModule {
     }
 }
 
-impl BentoScheduler<UpgradeData, UpgradeData> for BentoSched {
+impl BentoScheduler<UpgradeData, UpgradeData, UserMessage> for BentoSched {
     fn get_policy(&self) -> i32 {
         10
     }
@@ -158,7 +168,7 @@ impl BentoScheduler<UpgradeData, UpgradeData> for BentoSched {
         //    map.insert(*next, 1);
         //    return Some(*next);
         //}
-        //return None;
+        return None;
     }
 
     fn reregister_prepare(&mut self) -> Option<UpgradeData> {
@@ -176,6 +186,41 @@ impl BentoScheduler<UpgradeData, UpgradeData> for BentoSched {
             mem::swap(&mut self.map, &mut data.map);
             mem::swap(&mut self.q, &mut data.q);
         }
+    }
+
+    fn register_queue(&self, q: RingBuffer<UserMessage>) {
+        println!("q ptr {:?}", q.inner);
+        unsafe {
+        println!("q ptr {:?}", (*q.inner).offset);
+        println!("q capacity {}", (*q.inner).capacity);
+        println!("q readptr {}", (*q.inner).readptr);
+        println!("q writeptr {}", (*q.inner).writeptr);
+        let mut user_q = self.user_q.as_ref().unwrap().write();
+        user_q.replace(q);
+
+        //self.user_q = Some(RwLock::new(q));
+        }
+    }
+
+    fn enter_queue(&self, entries: u32) {
+        let mut user_q_guard = self.user_q.as_ref().unwrap().write();
+        let user_q = user_q_guard.as_mut().unwrap();
+        for i in 0..entries {
+        unsafe {
+        println!("user_q head {}", (*user_q.inner).writeptr);
+        println!("user_q tail {}", (*user_q.inner).readptr);
+        }
+        let msg = user_q.dequeue();
+        println!("msg val {:?}", msg);
+        }
+    }
+
+    fn unregister_queue(&self) -> RingBuffer<UserMessage> {
+        let mut user_q = self.user_q.as_ref().unwrap().write();
+        let q = user_q.take();
+        println!("freeing queue");
+        // We must have a q or this won't be called
+        q.unwrap()
     }
 }
 
