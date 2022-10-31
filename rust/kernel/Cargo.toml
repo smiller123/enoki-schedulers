@@ -10,6 +10,7 @@ crate-type = ["staticlib"]
 
 [features]
 default = []
+record = ["bento/record"]
 
 [dependencies]
 bento = {path = "../../../bento/bento/rust" }

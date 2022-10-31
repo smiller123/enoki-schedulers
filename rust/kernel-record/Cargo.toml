@@ -12,8 +12,9 @@ crate-type = ["staticlib"]
 default = []
 
 [dependencies]
-bento = {path = "../../bento/bento/rust" }
-datablock = { path = "../../bento/datablock-rs/datablock" }
+bento = {path = "../../../bento/bento/rust", default-features = false, features = ["record"] }
+datablock = { path = "../../../bento/datablock-rs/datablock" }
 rlibc = "1.0"
 hash32 = "0.1.1"
 spin = { version = "0.9.4", features = ["rwlock"] }
+serde = {version = "1.0.*", default-features = false, features = ["derive"] }

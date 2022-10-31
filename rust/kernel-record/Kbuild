@@ -1,7 +1,7 @@
 obj-m := bento_ghost.o
-bento_ghost-objs := bento_ghost.rust.o
+bento_ghost-objs := src/module.o bento_ghost.rust.o
 
-# EXTRA_LDFLAGS += --gc-sections --entry=init_module --undefined=cleanup_module
+EXTRA_LDFLAGS += --entry=init_module --undefined=cleanup_module
 
 CARGO ?= cargo
 

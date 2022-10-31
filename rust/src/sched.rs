@@ -102,6 +102,8 @@ impl BentoScheduler<'_, UpgradeData, UpgradeData, UserMessage> for BentoSched {
             if (map.get(&pid).is_none() ||
                 map.get(&pid) == Some(&(cpu as u32))) {
 
+                //println!("pnt cpu {} would pick {}", cpu, pid);
+                //return None;
                 Some(pid)
             } else {
                 //println!("can't schedule on other cpu\n");
@@ -117,13 +119,19 @@ impl BentoScheduler<'_, UpgradeData, UpgradeData, UserMessage> for BentoSched {
         let mut map = self.map.as_ref().unwrap().write();
         //*map.get(&pid).unwrap_or(&1) as i32
         match map.get(&pid) {
-            None => pid as i32 % 2,
+            None => {
+                map.insert(pid, pid as u32 % 2);
+                pid as i32 % 2
+            },
+            //None => 1,
             Some(cpu) => *cpu as i32,
         }
     }
 
     fn migrate_task_rq(&self, pid: u64, new_cpu: i32) {
         //println!("hitting migrate_task_rq pid {} to cpu {}", pid, new_cpu);
+        let mut map = self.map.as_ref().unwrap().write();
+        map.insert(pid, new_cpu as u32);
     }
 
     fn balance(&self, cpu: i32) -> Option<u64> {

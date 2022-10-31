@@ -40,7 +40,6 @@ main ()
     char command[100];
     strcpy(command, "perf bench sched pipe");
     int fd;
-    //struct bento_ring_offsets offsets;
     struct bento_ioc_create_queue create_queue;
     struct bento_ioc_enter_queue enter_queue;
     void *map_region;
@@ -48,17 +47,9 @@ main ()
     int q_fd;
     struct sched_msg msg;
 
-    //offsets.head = 0;
-    //offsets.tail = 0;
-    //offsets.ring_mask = 0;
-    //offsets.flags = 0;
-    //offsets.dropped = 0;
-    //offsets.array = 0;
-
     create_queue.elems = 2;
     create_queue.flags = 0;
     create_queue.mapsize = 0;
-    //create_queue.offsets = offsets;
 
     fd = open("/sys/fs/ghost/enclave_10/ctl", O_RDWR);
     printf("errno %d\n", errno);
@@ -75,9 +66,9 @@ main ()
     printf("q capacity %d\n", q->capacity);
     printf("q head %d\n", q->head);
     printf("q tail %d\n", q->tail);
-    //msg = (struct sched_msg *)((void *)map_region + q->offset);
-    //msg->val = 10;
-    //q->head += 1;
+    ////msg = (struct sched_msg *)((void *)map_region + q->offset);
+    ////msg->val = 10;
+    ////q->head += 1;
 
     msg.val = 10;
     enqueue(q, msg);
@@ -87,13 +78,14 @@ main ()
     enqueue(q, msg);
 
     enter_queue.entries = 3;
-    ioctl(fd, GHOST_IOC_ENTER_QUEUE, (int32_t*) &enter_queue);
+    ////ioctl(fd, GHOST_IOC_ENTER_QUEUE, (int32_t*) &enter_queue);
+    ioctl(fd, EKIBEN_IOC_SEND_HINT, (int32_t*) &msg);
     close(q_fd);
     close(fd);
 
     param.sched_priority = 0;
     sched_setscheduler(pid_num, 10, &param);
-    //system(command);
+    system(command);
     //while (1) 
     //  ;
 }

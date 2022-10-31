@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := kernel
-.PHONY: kernel userspace clean
+.PHONY: kernel kernel-record record replay clean
 export KDIR ?= /lib/modules/$(shell uname -r)/build
 CLANG ?= clang-11
 ifeq ($(origin CC),default)
@@ -11,12 +11,24 @@ all:
 	make userspace
 
 kernel:
-	$(MAKE) -C $(KDIR) M=$(CURDIR) CC=$(CC) CONFIG_CC_IS_CLANG=y
+	cp src/* kernel/src
+	touch kernel/.bento_ghost.rust.o.cmd
+	$(MAKE) -C $(KDIR) M=$(CURDIR)/kernel CC=$(CC) CONFIG_CC_IS_CLANG=y
 
-userspace:
-	cp src/* userspace/src
-	(cd userspace; cargo build --release --features "user")
+kernel-record:
+	cp src/* kernel-record/src
+	touch kernel-record/.bento_ghost.rust.o.cmd
+	$(MAKE) -C $(KDIR) M=$(CURDIR)/kernel-record CC=$(CC) CONFIG_CC_IS_CLANG=y
+
+record:
+	(cd record; cargo build --release)
+
+replay:
+	cp src/* replay/src
+	(cd replay; cargo build --release --features "replay")
 
 clean:
-	$(MAKE) -C $(KDIR) M=$(CURDIR) clean
-	(cargo clean)
+	$(MAKE) -C $(KDIR) M=$(CURDIR)/kernel clean
+	(cd kernel; cargo clean)
+	(cd record; cargo clean)
+	(cd replay; cargo clean)
