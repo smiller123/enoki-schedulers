@@ -33,13 +33,13 @@ use self::ringbuffer::RingBuffer;
 #[repr(C)]
 pub struct BentoSched {
     pub q: Option<RwLock<VecDeque<u64>>>,
-    pub map: Option<RwLock<BTreeMap<u64, u32>>>,
+    pub map: Option<RwLock<BTreeMap<u64, Schedulable>>>,
     pub user_q: Option<RwLock<Option<RingBuffer<UserMessage>>>>,
 }
 
 pub struct UpgradeData {
     q: Option<RwLock<VecDeque<u64>>>,
-    map: Option<RwLock<BTreeMap<u64, u32>>>
+    map: Option<RwLock<BTreeMap<u64, Schedulable>>>
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy)]
@@ -55,17 +55,20 @@ impl BentoScheduler<'_, UpgradeData, UpgradeData, UserMessage> for BentoSched {
     //fn init(&mut self) {
    // }
 
-    fn task_new(&self, pid: u64, _runtime: u64, runnable: u16) {
+    fn task_new(&self, pid: u64, _runtime: u64, runnable: u16, sched: Schedulable) {
         if runnable > 0 {
             let mut q = self.q.as_ref().unwrap().write();
             q.push_back(pid);
-            //let mut map = self.map.as_ref().unwrap().write();
-            //map.insert(pid, -1);
+            let mut map = self.map.as_ref().unwrap().write();
+            if map.get(&pid).is_none() {
+                map.insert(pid, sched);
+            }
         }
     }
 
     fn task_wakeup(&self, pid: u64, _agent_data: u64, deferrable: bool,
-                   _last_run_cpu: i32, wake_up_cpu: i32, _waker_cpu: i32) {
+                   _last_run_cpu: i32, _wake_up_cpu: i32, _waker_cpu: i32,
+                   sched: Schedulable) {
         let mut q = self.q.as_ref().unwrap().write();
         let mut map = self.map.as_ref().unwrap().write();
         if deferrable {
@@ -73,38 +76,47 @@ impl BentoScheduler<'_, UpgradeData, UpgradeData, UserMessage> for BentoSched {
         } else {
             q.push_front(pid);
         }
-        map.insert(pid, wake_up_cpu as u32);
+        //map.insert(pid, wake_up_cpu as u32);
+        map.insert(pid, sched);
     }
 
-    fn task_preempt(&self, pid: u64, _runtime: u64, _cpu_seqnum: u64, cpu: i32,
-                    _from_switchto: i8, _was_latched: i8) {
+    fn task_preempt(&self, pid: u64, _runtime: u64, _cpu_seqnum: u64, _cpu: i32,
+                    _from_switchto: i8, _was_latched: i8, sched: Schedulable) {
         let mut q = self.q.as_ref().unwrap().write();
         q.push_back(pid);
         let mut map = self.map.as_ref().unwrap().write();
-        map.insert(pid, cpu as u32);
+        map.insert(pid, sched);
     }
 
     fn task_blocked(&self, pid: u64, _runtime: u64, _cpu_seqnum: u64,
-                    cpu: i32, _from_switchto: i8) {
+                    _cpu: i32, _from_switchto: i8, sched: Schedulable) {
         let mut q = self.q.as_ref().unwrap().write();
         // position depends on iterator state, so don't use iterator before we call position
         if let Some(idx) = q.iter().position(|&x| x == pid) {
             q.remove(idx);
         }
         let mut map = self.map.as_ref().unwrap().write();
-        map.insert(pid, cpu as u32);
+        //map.insert(pid, cpu as u32);
+        map.insert(pid, sched);
     }
 
-    fn pick_next_task(&self, cpu: i32) -> Option<u64> {
+    fn pick_next_task(&self, cpu: i32) -> Option<Schedulable> {
         let mut q = self.q.as_ref().unwrap().write();
         if let Some(pid) = q.pop_front() {
             let map = self.map.as_ref().unwrap().read();
-            if (map.get(&pid).is_none() ||
-                map.get(&pid) == Some(&(cpu as u32))) {
+            if map.get(&pid).is_none() {
+                println!("Terrible problem, pid has no cpu");
+                q.push_front(pid);
+                return None;
+            }
+            if (map.get(&pid).unwrap().get_cpu() == cpu as u32 ||
+                map.get(&pid).unwrap().get_cpu() == u32::MAX) {
 
                 //println!("pnt cpu {} would pick {}", cpu, pid);
                 //return None;
-                Some(pid)
+                //Some(pid)
+                // None shouldn't happen anymore
+                Some(*map.get(&pid).unwrap())
             } else {
                 //println!("can't schedule on other cpu\n");
                 q.push_front(pid);
@@ -115,23 +127,35 @@ impl BentoScheduler<'_, UpgradeData, UpgradeData, UserMessage> for BentoSched {
         }
     }
 
+    fn pnt_err(&self, sched: Schedulable) {
+        let mut map = self.map.as_ref().unwrap().write();
+        map.insert(sched.get_pid(), sched);
+    }
+
     fn select_task_rq(&self, pid: u64) -> i32 {
         let mut map = self.map.as_ref().unwrap().write();
         //*map.get(&pid).unwrap_or(&1) as i32
         match map.get(&pid) {
             None => {
-                map.insert(pid, pid as u32 % 2);
+                //map.insert(pid, pid as u32 % 2);
                 pid as i32 % 2
             },
             //None => 1,
-            Some(cpu) => *cpu as i32,
+            Some(sched) => sched.get_cpu() as i32,
         }
     }
 
-    fn migrate_task_rq(&self, pid: u64, new_cpu: i32) {
+    fn selected_task_rq(&self, sched: Schedulable) {
+        let mut map = self.map.as_ref().unwrap().write();
+        map.insert(sched.get_pid(), sched);
+    }
+
+    //fn migrate_task_rq(&self, pid: u64, new_cpu: i32) {
+    fn migrate_task_rq(&self, pid: u64, sched: Schedulable) {
         //println!("hitting migrate_task_rq pid {} to cpu {}", pid, new_cpu);
         let mut map = self.map.as_ref().unwrap().write();
-        map.insert(pid, new_cpu as u32);
+        //map.insert(pid, new_cpu as u32);
+        map.insert(pid, sched);
     }
 
     fn balance(&self, cpu: i32) -> Option<u64> {
