@@ -2,8 +2,12 @@
 use bento::println;
 #[cfg(not(feature = "replay"))]
 use bento::scheduler_utils;
+#[cfg(not(feature = "replay"))]
+use bento::spin_rs::RwLock;
 #[cfg(feature = "replay")]
 use scheduler_utils;
+#[cfg(feature = "replay")]
+use scheduler_utils::spin_rs::RwLock;
 
 use serde::{Serialize, Deserialize};
 
@@ -16,7 +20,10 @@ use self::scheduler_utils::*;
 //use bento::std::ffi::OsStr;
 //use bento::kernel::kobj::CStr;
 
-use spin::RwLock;
+//use spin::RwLock;
+
+//use bento::spin_rs;
+//use bento::spin_rs::RwLock;
 
 //use enclave::LocalEnclave;
 //use ghost::Ghost;
@@ -35,6 +42,7 @@ pub struct BentoSched {
     pub q: Option<RwLock<VecDeque<u64>>>,
     pub map: Option<RwLock<BTreeMap<u64, Schedulable>>>,
     pub user_q: Option<RwLock<Option<RingBuffer<UserMessage>>>>,
+    pub rev_q: Option<RwLock<Option<RingBuffer<UserMessage>>>>,
 }
 
 pub struct UpgradeData {
@@ -47,7 +55,7 @@ pub struct UserMessage {
     val: i32
 }
 
-impl BentoScheduler<'_, UpgradeData, UpgradeData, UserMessage> for BentoSched {
+impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> for BentoSched {
     fn get_policy(&self) -> i32 {
         10
     }
@@ -101,6 +109,15 @@ impl BentoScheduler<'_, UpgradeData, UpgradeData, UserMessage> for BentoSched {
     }
 
     fn pick_next_task(&self, cpu: i32) -> Option<Schedulable> {
+        if self.rev_q.is_some()
+        {
+            let mut rev_q_guard = self.rev_q.as_ref().unwrap().write();
+            if rev_q_guard.is_some() {
+            let rev_q = rev_q_guard.as_mut().unwrap();
+            let msg = UserMessage { val: 10 };
+            rev_q.enqueue(msg);
+            }
+        }
         let mut q = self.q.as_ref().unwrap().write();
         if let Some(pid) = q.pop_front() {
             let map = self.map.as_ref().unwrap().read();
@@ -209,6 +226,20 @@ impl BentoScheduler<'_, UpgradeData, UpgradeData, UserMessage> for BentoSched {
         }
     }
 
+    fn register_reverse_queue(&self, q: RingBuffer<UserMessage>) {
+        //println!("q ptr {:?}", q.inner);
+        unsafe {
+        //println!("q ptr {:?}", (*q.inner).offset);
+        //println!("q capacity {}", (*q.inner).capacity);
+        //println!("q readptr {}", (*q.inner).readptr);
+        //println!("q writeptr {}", (*q.inner).writeptr);
+        let mut rev_q = self.rev_q.as_ref().unwrap().write();
+        rev_q.replace(q);
+
+        //self.user_q = Some(RwLock::new(q));
+        }
+    }
+
     fn enter_queue(&self, entries: u32) {
         let mut user_q_guard = self.user_q.as_ref().unwrap().write();
         let user_q = user_q_guard.as_mut().unwrap();
@@ -225,6 +256,14 @@ impl BentoScheduler<'_, UpgradeData, UpgradeData, UserMessage> for BentoSched {
     fn unregister_queue(&self) -> RingBuffer<UserMessage> {
         let mut user_q = self.user_q.as_ref().unwrap().write();
         let q = user_q.take();
+        println!("freeing queue");
+        // We must have a q or this won't be called
+        q.unwrap()
+    }
+
+    fn unregister_rev_queue(&self) -> RingBuffer<UserMessage> {
+        let mut rev_q = self.rev_q.as_ref().unwrap().write();
+        let q = rev_q.take();
         println!("freeing queue");
         // We must have a q or this won't be called
         q.unwrap()

@@ -30,5 +30,6 @@ replay:
 clean:
 	$(MAKE) -C $(KDIR) M=$(CURDIR)/kernel clean
 	(cd kernel; cargo clean)
+	(cd kernel-record; cargo clean)
 	(cd record; cargo clean)
 	(cd replay; cargo clean)

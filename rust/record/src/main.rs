@@ -95,7 +95,8 @@ fn main() {
     let mut f = File::create(replay_name).unwrap();
 
     let mut options = OpenOptions::new();
-    let agent_file = options.read(true).write(true).open("/sys/fs/ghost/enclave_10/ctl").unwrap();
+    //let agent_file = options.read(true).write(true).open("/sys/fs/ghost/enclave_10/ctl").unwrap();
+    let agent_file = options.read(true).write(true).open("/sys/fs/ghost/ctl").unwrap();
     let mut create_queue = bento_ioc_create_queue {
         elems: 32,
         flags: 0,

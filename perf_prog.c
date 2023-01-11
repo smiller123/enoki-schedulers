@@ -33,6 +33,20 @@ void enqueue(struct queue *q, struct sched_msg msg) {
     //msg = (struct sched_msg *)((void *)map_region + q->offset);
 }
 
+struct sched_msg dequeue(struct queue *q) {
+    struct sched_msg msg;
+	struct sched_msg *ptr = (void *)q + q->offset;
+	printf("ptr start %p\n", ptr);
+	uint32_t index = q->tail & (q->capacity - 1);
+	ptr += index;
+	printf("ptr curr %p\n", ptr);
+	q->tail += 1;
+	printf("ptr val %d\n", ptr->val);
+	msg.val = ptr->val;
+	return msg;
+    //msg = (struct sched_msg *)((void *)map_region + q->offset);
+}
+
 main ()
 {
     struct sched_param param;
@@ -53,7 +67,8 @@ main ()
 
     fd = open("/sys/fs/ghost/enclave_10/ctl", O_RDWR);
     printf("errno %d\n", errno);
-    q_fd = ioctl(fd, GHOST_IOC_CREATE_QUEUE, (int32_t*) &create_queue);
+    //q_fd = ioctl(fd, GHOST_IOC_CREATE_QUEUE, (int32_t*) &create_queue);
+    q_fd = ioctl(fd, GHOST_IOC_CREATE_REV_QUEUE, (int32_t*) &create_queue);
     printf("mapsize %d\n", create_queue.mapsize);
     printf("q_fd %d\n", q_fd);
 
@@ -69,17 +84,22 @@ main ()
     ////msg = (struct sched_msg *)((void *)map_region + q->offset);
     ////msg->val = 10;
     ////q->head += 1;
+    while (q->head == 0) {
+    	sleep(1);
+    }
+    msg = dequeue(q);
+    printf("msg val %d\n", msg.val);
 
-    msg.val = 10;
-    enqueue(q, msg);
-    msg.val = 20;
-    enqueue(q, msg);
-    msg.val = 30;
-    enqueue(q, msg);
+    //msg.val = 10;
+    //enqueue(q, msg);
+    //msg.val = 20;
+    //enqueue(q, msg);
+    //msg.val = 30;
+    //enqueue(q, msg);
 
-    enter_queue.entries = 3;
+    //enter_queue.entries = 3;
     ////ioctl(fd, GHOST_IOC_ENTER_QUEUE, (int32_t*) &enter_queue);
-    ioctl(fd, EKIBEN_IOC_SEND_HINT, (int32_t*) &msg);
+    //ioctl(fd, EKIBEN_IOC_SEND_HINT, (int32_t*) &msg);
     close(q_fd);
     close(fd);
 
