@@ -94,6 +94,7 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         q.push_back(pid);
         let mut map = self.map.as_ref().unwrap().write();
         map.insert(pid, sched);
+        hrtick::hrtick_start(_cpu, 10000);
     }
 
     fn task_blocked(&self, pid: u64, _runtime: u64, _cpu_seqnum: u64,
@@ -153,11 +154,11 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         let mut map = self.map.as_ref().unwrap().write();
         //*map.get(&pid).unwrap_or(&1) as i32
         match map.get(&pid) {
-            None => {
-                //map.insert(pid, pid as u32 % 2);
-                pid as i32 % 2
-            },
-            //None => 1,
+            //None => {
+            //    //map.insert(pid, pid as u32 % 2);
+            //    pid as i32 % 2
+            //},
+            None => 1,
             Some(sched) => sched.get_cpu() as i32,
         }
     }
@@ -267,6 +268,15 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         println!("freeing queue");
         // We must have a q or this won't be called
         q.unwrap()
+    }
+
+    fn task_tick(&self, cpu: i32, queued: bool) {
+        if queued {
+            println!("ticking {}", cpu);
+            unsafe {
+                bento::bindings::resched_cpu_no_lock(cpu);
+            }
+        }
     }
 }
 

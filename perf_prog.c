@@ -65,30 +65,30 @@ main ()
     create_queue.flags = 0;
     create_queue.mapsize = 0;
 
-    fd = open("/sys/fs/ghost/enclave_10/ctl", O_RDWR);
-    printf("errno %d\n", errno);
-    //q_fd = ioctl(fd, GHOST_IOC_CREATE_QUEUE, (int32_t*) &create_queue);
-    q_fd = ioctl(fd, GHOST_IOC_CREATE_REV_QUEUE, (int32_t*) &create_queue);
-    printf("mapsize %d\n", create_queue.mapsize);
-    printf("q_fd %d\n", q_fd);
+    //fd = open("/sys/fs/ghost/enclave_10/ctl", O_RDWR);
+    //printf("errno %d\n", errno);
+    ////q_fd = ioctl(fd, GHOST_IOC_CREATE_QUEUE, (int32_t*) &create_queue);
+    //q_fd = ioctl(fd, GHOST_IOC_CREATE_REV_QUEUE, (int32_t*) &create_queue);
+    //printf("mapsize %d\n", create_queue.mapsize);
+    //printf("q_fd %d\n", q_fd);
 
-    map_region = mmap(0, create_queue.mapsize, PROT_READ | PROT_WRITE, MAP_SHARED, q_fd, 0);
-    printf("errno %d\n", errno);
-    printf("map_region %p\n", map_region);
+    //map_region = mmap(0, create_queue.mapsize, PROT_READ | PROT_WRITE, MAP_SHARED, q_fd, 0);
+    //printf("errno %d\n", errno);
+    //printf("map_region %p\n", map_region);
 
-    q = (struct queue *)map_region;
-    printf("q ptr %d\n", q->offset);
-    printf("q capacity %d\n", q->capacity);
-    printf("q head %d\n", q->head);
-    printf("q tail %d\n", q->tail);
+    //q = (struct queue *)map_region;
+    //printf("q ptr %d\n", q->offset);
+    //printf("q capacity %d\n", q->capacity);
+    //printf("q head %d\n", q->head);
+    //printf("q tail %d\n", q->tail);
     ////msg = (struct sched_msg *)((void *)map_region + q->offset);
     ////msg->val = 10;
     ////q->head += 1;
-    while (q->head == 0) {
-    	sleep(1);
-    }
-    msg = dequeue(q);
-    printf("msg val %d\n", msg.val);
+    //while (q->head == 0) {
+    //	sleep(1);
+    //}
+    //msg = dequeue(q);
+    //printf("msg val %d\n", msg.val);
 
     //msg.val = 10;
     //enqueue(q, msg);
@@ -100,8 +100,8 @@ main ()
     //enter_queue.entries = 3;
     ////ioctl(fd, GHOST_IOC_ENTER_QUEUE, (int32_t*) &enter_queue);
     //ioctl(fd, EKIBEN_IOC_SEND_HINT, (int32_t*) &msg);
-    close(q_fd);
-    close(fd);
+    //close(q_fd);
+    //close(fd);
 
     param.sched_priority = 0;
     sched_setscheduler(pid_num, 10, &param);
