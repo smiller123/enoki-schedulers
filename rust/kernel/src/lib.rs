@@ -7,6 +7,7 @@
 #![feature(rustc_private)]
 #![allow(improper_ctypes)]
 #![feature(const_btree_new)]
+#![feature(map_first_last)]
 #![no_std]
 
 extern crate alloc;
@@ -32,9 +33,12 @@ use bento::kernel::kobj::CStr;
 use bento::spin_rs::RwLock;
 
 use sched::BentoSched;
+use sched::CpuState;
 
 use alloc::collections::vec_deque::VecDeque;
 use alloc::collections::btree_map::BTreeMap;
+use alloc::collections::btree_set::BTreeSet;
+//use slice_rbtree::tree::{tree_size, RBTree, TreeParams};
 
 use core::mem;
 use core::str;
@@ -43,8 +47,10 @@ use core::fmt::Debug;
 use ringbuffer::RingBuffer;
 
 pub static mut BENTO_SCHED: BentoSched = BentoSched {
-    q: None,
+//    sets_list: None,
     map: None,
+    state: None,
+    cpu_state: None,
     user_q: None,
     rev_q: None,
 };
@@ -63,8 +69,29 @@ pub fn rust_main(record_file: *const i8) {
             println!("file {:?}", name_str.to_str());
         //println!("record_file {}", *record_file);
         //println!("record_file {}", *record_file.offset(1));
-        BENTO_SCHED.q = Some(RwLock::new(VecDeque::new()));
+        let mut cpu_state = BTreeMap::new();
+        for i in 0..6 {
+            let state = CpuState {
+                weight: 0,
+                inv_weight: 0,
+              //  leftmost: (u64::MAX, u64::MAX),
+                set: BTreeSet::new(),
+             //   fake_set: BTreeSet::new(),
+            };
+            cpu_state.insert(i, RwLock::new(state));
+        }
+        let state = CpuState {
+            weight: 0,
+            inv_weight: 0,
+            //leftmost: (u64::MAX, u64::MAX),
+            set: BTreeSet::new(),
+            //fake_set: BTreeSet::new(),
+        };
+        cpu_state.insert(u32::MAX, RwLock::new(state));
+//        BENTO_SCHED.sets_list = Some(RwLock::new(sets_list));
         BENTO_SCHED.map = Some(RwLock::new(BTreeMap::new()));
+        BENTO_SCHED.state = Some(RwLock::new(BTreeMap::new()));
+        BENTO_SCHED.cpu_state = Some(RwLock::new(cpu_state));
         BENTO_SCHED.user_q = Some(RwLock::new(None));
         BENTO_SCHED.rev_q = Some(RwLock::new(None));
         BENTO_SCHED.register();
