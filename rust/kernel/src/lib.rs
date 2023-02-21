@@ -74,6 +74,8 @@ pub fn rust_main(record_file: *const i8) {
             let state = CpuState {
                 weight: 0,
                 inv_weight: 0,
+                curr: None,
+                exec_start: 0,
               //  leftmost: (u64::MAX, u64::MAX),
                 set: BTreeSet::new(),
              //   fake_set: BTreeSet::new(),
@@ -83,6 +85,8 @@ pub fn rust_main(record_file: *const i8) {
         let state = CpuState {
             weight: 0,
             inv_weight: 0,
+            curr: None,
+            exec_start: 0,
             //leftmost: (u64::MAX, u64::MAX),
             set: BTreeSet::new(),
             //fake_set: BTreeSet::new(),
