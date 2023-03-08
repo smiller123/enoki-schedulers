@@ -25,6 +25,7 @@ use bento::bindings as c;
 use bento::kernel::ffi;
 use bento::kernel::raw;
 use bento::scheduler_utils::*;
+//use rbtree::RBTree;
 
 use bento::std::ffi::OsStr;
 use bento::kernel::kobj::CStr;
@@ -50,9 +51,11 @@ pub static mut BENTO_SCHED: BentoSched = BentoSched {
 //    sets_list: None,
     map: None,
     state: None,
+    balancing: None,
     cpu_state: None,
     user_q: None,
     rev_q: None,
+    locked: None,
 };
 
 #[no_mangle]
@@ -78,6 +81,8 @@ pub fn rust_main(record_file: *const i8) {
                 exec_start: 0,
               //  leftmost: (u64::MAX, u64::MAX),
                 set: BTreeSet::new(),
+                free_time: 0,
+                //set: RBTree::new(),
              //   fake_set: BTreeSet::new(),
             };
             cpu_state.insert(i, RwLock::new(state));
@@ -89,12 +94,16 @@ pub fn rust_main(record_file: *const i8) {
             exec_start: 0,
             //leftmost: (u64::MAX, u64::MAX),
             set: BTreeSet::new(),
+            free_time: 0,
+            //set: RBTree::new(),
             //fake_set: BTreeSet::new(),
         };
         cpu_state.insert(u32::MAX, RwLock::new(state));
 //        BENTO_SCHED.sets_list = Some(RwLock::new(sets_list));
         BENTO_SCHED.map = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.state = Some(RwLock::new(BTreeMap::new()));
+        BENTO_SCHED.balancing = Some(RwLock::new(BTreeSet::new()));
+        BENTO_SCHED.locked = Some(RwLock::new(BTreeSet::new()));
         BENTO_SCHED.cpu_state = Some(RwLock::new(cpu_state));
         BENTO_SCHED.user_q = Some(RwLock::new(None));
         BENTO_SCHED.rev_q = Some(RwLock::new(None));

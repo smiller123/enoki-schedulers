@@ -8,6 +8,7 @@ use bento::spin_rs::RwLock;
 use scheduler_utils;
 #[cfg(feature = "replay")]
 use scheduler_utils::spin_rs::RwLock;
+use rbtree::RBTree;
 
 use serde::{Serialize, Deserialize};
 
@@ -51,20 +52,24 @@ pub struct BentoSched {
     pub cpu_state: Option<RwLock<BTreeMap<u32, RwLock<CpuState>>>>,
     pub user_q: Option<RwLock<Option<RingBuffer<UserMessage>>>>,
     pub rev_q: Option<RwLock<Option<RingBuffer<UserMessage>>>>,
+    pub balancing: Option<RwLock<BTreeSet<u64>>>,
+    pub locked: Option<RwLock<BTreeSet<u64>>>,
 }
 
 pub struct ProcessState {
     prio: i32,
-    vruntime: u64
+    vruntime: u64,
+    last_runtime: u64
 }
 
-#[derive(Default)]
+//#[derive(Default)]
 pub struct CpuState {
     pub weight: u64,
     pub inv_weight: u64,
     pub curr: Option<u64>,
     pub exec_start: u64,
     pub set: BTreeSet<(u64, u64)>,
+    pub free_time: u64,
 }
 
 pub struct UpgradeData {
@@ -80,9 +85,14 @@ pub struct UserMessage {
 
 fn calculate_vruntime(runtime: u64, prio: i32) -> u64 {
     let inv_weight = sched_core::SCHED_PRIO_TO_WMULT[(prio - 100) as usize] as u64;
-    let factor = 1024 * inv_weight;
+    let mut factor = 1024 * inv_weight;
+    let mut shift = 32;
+    while factor >> 32 > 0 {
+        factor >>= 1;
+        shift -= 1;
+    }
     let runtime_calc = runtime as u64 * factor;
-    runtime_calc >> 32
+    runtime_calc >> shift
 }
 
 
@@ -107,20 +117,26 @@ impl BentoSched {
                     old_vruntime = proc_state.vruntime;
                     proc_state.vruntime = old_vruntime + calculate_vruntime(delta_runtime, proc_state.prio);
                     vruntime = proc_state.vruntime;
+                    let old_last = proc_state.last_runtime;
+                    proc_state.last_runtime += delta_runtime;
+                    //if cpu == 0 {
+                    //println!("updating {} old runtime {} new runtime {} on cpu {}", curr, old_vruntime, proc_state.vruntime, cpu);
+                    //}
                 }
-                //println!("updating {} on {} to {}", curr, cpu, proc_state.vruntime);
+                //println!("updating {} on {}", curr, cpu);
                 let remove_val = (old_vruntime, curr);
                 let mut real_set = &mut cpu_state.set;
                 //let found = real_set.get(&remove_val);
                 //println!("remove was in? {:?}", found);
                 real_set.remove(&remove_val);
                 //real_set.insert(remove_val);
-                real_set.insert((vruntime, curr));
+                //real_set.insert((vruntime, curr));
                 cpu_state.exec_start = unsafe {
                     bento::bindings::cpu_clock_task(cpu)
                 };
             }
         } else {
+            cpu_state.free_time += 1;
             //println!("curr empty for cpu {}", cpu);
         }
     }
@@ -153,8 +169,12 @@ impl BentoSched {
         let weight = sched_core::SCHED_PRIO_TO_WEIGHT[(prio - 100) as usize] as u64;
         cpu_state.weight -= weight;
         let weight_shift = cpu_state.weight >> 10;
-        let inv_weight = 0xffffffff / weight_shift;
-        cpu_state.inv_weight = inv_weight;
+        if weight_shift > 0 {
+            let inv_weight = 0xffffffff / weight_shift;
+            cpu_state.inv_weight = inv_weight;
+        } else {
+            cpu_state.inv_weight = 0xffffffff;
+        }
     }
 }
 
@@ -167,16 +187,10 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
    // }
 
     fn task_new(&self, pid: u64, runtime: u64, runnable: u16, prio: i32, sched: Schedulable) {
+        //if sched.get_pid() == 0 {
         //println!("task new pid {} prio {} runtime {} cpu {}", pid, prio, runtime, sched.get_cpu());
-        let vruntime = calculate_vruntime(runtime, prio);
-        {
-            let mut state = self.state.as_ref().unwrap().write();
-            let procstate = ProcessState {
-                prio: prio,
-                vruntime: vruntime,
-            };
-            state.insert(pid, procstate);
-        }
+       // }
+        let mut vruntime = calculate_vruntime(runtime, prio);
         if runnable > 0 {
             let mut map = self.map.as_ref().unwrap().write();
             if map.get(&pid).is_none() {
@@ -190,8 +204,24 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
             let mut cpu_state = all_cpu_state.get(&cpu).unwrap().write();
             //let mut real_set = cpu_state.set.get(&cpu).unwrap().write();
             let mut real_set = &mut cpu_state.set;
+            if let Some((min_vruntime, _)) = real_set.first() {
+                //if *min_vruntime > vruntime {
+                //    println!("new updating vruntime to {}", *min_vruntime);
+                //}
+                vruntime = core::cmp::max(vruntime, *min_vruntime);
+            }
             real_set.insert((vruntime, pid));
+            //println!("new set is {:?}", real_set);
             self.add_weight(&mut cpu_state, prio);
+        //{
+            let mut state = self.state.as_ref().unwrap().write();
+            let procstate = ProcessState {
+                prio: prio,
+                vruntime: vruntime,
+                last_runtime: runtime,
+            };
+            state.insert(pid, procstate);
+        //}
             //let mut cpu_state = self.cpu_state.as_ref().unwrap().write();
             //let curr_weight_opt = cpu_state.get_mut(&cpu);
             //let weight = sched_core::SCHED_PRIO_TO_WEIGHT[(prio - 100) as usize] as u64;
@@ -231,7 +261,9 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
     fn task_wakeup(&self, pid: u64, _agent_data: u64, deferrable: bool,
                    _last_run_cpu: i32, _wake_up_cpu: i32, _waker_cpu: i32,
                    sched: Schedulable) {
+        //if sched.get_cpu() == 0 {
         //println!("wakeup {} {} cpu {}", pid, _wake_up_cpu, sched.get_cpu());
+        //}
         let mut new_sched = false;
         {
             let mut map = self.map.as_ref().unwrap().write();
@@ -239,11 +271,11 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
                 if old_sched.get_cpu() != sched.get_cpu() {
                     new_sched = true;
                 }
+            } else {
+                new_sched = true;
             }
             map.insert(pid, sched);
         }
-        let mut state = self.state.as_ref().unwrap().read();
-        let proc_state = state.get(&pid).unwrap();
         let cpu = sched.get_cpu();
         //let sets_list = self.sets_list.as_ref().unwrap().read();
         //let mut real_set = sets_list.get(&cpu).unwrap().write();
@@ -253,6 +285,17 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         let mut cpu_state = all_cpu_state.get(&cpu).unwrap().write();
         //let mut real_set = cpu_state.set.get(&cpu).unwrap().write();
         let mut real_set = &mut cpu_state.set;
+        let mut state = self.state.as_ref().unwrap().write();
+        let proc_state = state.get_mut(&pid).unwrap();
+        if let Some((min_vruntime, _)) = real_set.first() {
+            //let old_vruntime = proc_state.vruntime;
+            if *min_vruntime > 6000000 {
+                proc_state.vruntime = core::cmp::max(*min_vruntime - 6000000, proc_state.vruntime);
+                //if old_vruntime != proc_state.vruntime && sched.get_cpu() == 0 {
+                //    println!("wakeup updating {} vruntime from {} to {}, min {}", pid, old_vruntime, proc_state.vruntime, *min_vruntime);
+                //}
+            }
+        }
         real_set.insert((proc_state.vruntime, pid));
         //println!("wakeup {} {} {}", pid, _wake_up_cpu, real_set.len());
         //self.add_weight(&mut cpu_state, prio);
@@ -260,7 +303,7 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         //if cpu_state.get(&(cpu as u32)).is_none() {
         //    println!("wakeup cpu is {}", cpu);
         //}
-        if new_sched {
+        //if new_sched {
             self.add_weight(&mut cpu_state, proc_state.prio);
             //let mut cpu_state = self.cpu_state.as_ref().unwrap().write();
             //let curr_weight_opt = cpu_state.get_mut(&cpu);
@@ -284,7 +327,7 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
             //    //println!("putting cpu {}", cpu);
             //    cpu_state.insert(cpu, new_weight);
             //}
-        }
+        //}
         //let cpu_state = self.cpu_state.as_ref().unwrap().read();
         //if cpu_state.get(&(cpu as u32)).is_none() {
         //    println!("wakeup cpu is {}", cpu);
@@ -296,25 +339,48 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
                     _from_switchto: i8, _was_latched: i8, sched: Schedulable) {
         let vruntime;
         let old_vruntime;
+        let mut map = self.map.as_ref().unwrap().write();
+        map.insert(pid, sched);
+        let cpu = sched.get_cpu();
+        let all_cpu_state = self.cpu_state.as_ref().unwrap().read();
+        let mut cpu_state = all_cpu_state.get(&cpu).unwrap().write();
+        let mut real_set = &mut cpu_state.set;
         {
             let mut state = self.state.as_ref().unwrap().write();
             let procstate = state.get_mut(&pid).unwrap();
             old_vruntime = procstate.vruntime;
-            procstate.vruntime = calculate_vruntime(runtime, procstate.prio);
+            let delta_runtime = runtime - procstate.last_runtime;
+            if let Some((min_vruntime, _)) = real_set.first() {
+                if *min_vruntime > 6000000 {
+                    procstate.vruntime = core::cmp::max(*min_vruntime - 6000000, procstate.vruntime);
+                }
+            }
+            procstate.vruntime += calculate_vruntime(delta_runtime, procstate.prio);
+            //procstate.vruntime = calculate_vruntime(runtime, procstate.prio);
+            //let other_vruntime = calculate_vruntime(runtime, procstate.prio);
+            //if other_vruntime != procstate.vruntime {
+            //    println!("preempt {} old vruntime {} new {} runtime {} last runtime {}", pid, other_vruntime, procstate.vruntime, runtime, procstate.last_runtime);
+            //}
             vruntime = procstate.vruntime;
+            procstate.last_runtime = runtime;
         }
+        //if sched.get_cpu() == 0 {
         //println!("preempt {} {} {} {}", pid, _cpu, sched.get_cpu(), vruntime);
+        //}
         let remove_val = (old_vruntime, pid);
-        let mut map = self.map.as_ref().unwrap().write();
-        map.insert(pid, sched);
-        let cpu = sched.get_cpu();
+        //let mut map = self.map.as_ref().unwrap().write();
+        //map.insert(pid, sched);
+        //let cpu = sched.get_cpu();
         //let sets_list = self.sets_list.as_ref().unwrap().read();
         //let mut real_set = sets_list.get(&cpu).unwrap().write();
-        let all_cpu_state = self.cpu_state.as_ref().unwrap().read();
-        let mut cpu_state = all_cpu_state.get(&cpu).unwrap().write();
-        let mut real_set = &mut cpu_state.set;
+        //let all_cpu_state = self.cpu_state.as_ref().unwrap().read();
+        //let mut cpu_state = all_cpu_state.get(&cpu).unwrap().write();
+        //let mut real_set = &mut cpu_state.set;
         real_set.remove(&remove_val);
         real_set.insert((vruntime, pid));
+        if cpu_state.curr == Some(pid) {
+            cpu_state.curr = None;
+        }
         ////let cpu_state = self.cpu_state.as_ref().unwrap().read();
         //if cpu_state.get(&(cpu as u32)).is_none() {
         //    println!("preempt cpu is {}", cpu);
@@ -333,11 +399,25 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
             let procstate = state.get_mut(&pid).unwrap();
             old_vruntime = procstate.vruntime;
             prio = procstate.prio;
+            let delta_runtime = runtime - procstate.last_runtime;
             //procstate.vruntime += runtime;
-            procstate.vruntime = calculate_vruntime(runtime, procstate.prio);
+            procstate.vruntime += calculate_vruntime(delta_runtime, procstate.prio);
+            //procstate.vruntime = calculate_vruntime(runtime, procstate.prio);
+            //let other_vruntime = calculate_vruntime(runtime, procstate.prio);
+            //if other_vruntime != procstate.vruntime && runtime != procstate.vruntime {
+            //    println!("blocked {} prio {} old vruntime {} new {} runtime {} last runtime {}", pid, procstate.prio, other_vruntime, procstate.vruntime, runtime, procstate.last_runtime);
+            //    let inv_weight = sched_core::SCHED_PRIO_TO_WMULT[(procstate.prio - 100) as usize] as u64;
+            //    let factor = 1024 * inv_weight;
+            //    let runtime_calc = runtime as u64 * factor;
+            //    let calc_vrun = runtime_calc >> 32;
+            //    println!("inv {} fact {} calc {} vrun {}", inv_weight, factor, runtime_calc, calc_vrun);
+            //}
             vruntime = procstate.vruntime;
+            procstate.last_runtime = runtime;
         }
+        //if sched.get_cpu() == 0 {
         //println!("blocked {} {} {} {}", pid, _cpu, sched.get_cpu(), vruntime);
+        //}
         let remove_val = (old_vruntime, pid);
 
         let mut map = self.map.as_ref().unwrap().write();
@@ -351,6 +431,7 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
             let mut cpu_state = all_cpu_state.get(&cpu).unwrap().write();
             let mut real_set = &mut cpu_state.set;
             real_set.remove(&remove_val);
+            self.remove_weight(&mut cpu_state, prio);
             if cpu_state.curr == Some(pid) {
                 cpu_state.curr = None;
             }
@@ -359,11 +440,11 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         //map.insert(pid, cpu as u32);
         let new_sched = sched.get_cpu() != cpu;
         map.insert(pid, sched);
-        if new_sched {
-            let all_cpu_state = self.cpu_state.as_ref().unwrap().read();
-            let mut cpu_state = all_cpu_state.get(&sched.get_cpu()).unwrap().write();
-            self.add_weight(&mut cpu_state, prio);
-        }
+        //if new_sched {
+        //    let all_cpu_state = self.cpu_state.as_ref().unwrap().read();
+        //    let mut cpu_state = all_cpu_state.get(&sched.get_cpu()).unwrap().write();
+        //    self.add_weight(&mut cpu_state, prio);
+        //}
         //let cpu_state = self.cpu_state.as_ref().unwrap().read();
         //if cpu_state.get(&(sched.get_cpu() as u32)).is_none() {
         //    println!("block cpu is {}", sched.get_cpu());
@@ -372,7 +453,29 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
 
     fn task_dead(&self, pid: u64) {
         //println!("deadge {}", pid);
-        // TODO: Remove weight from cpu
+        // TODO: Remove weight from cpu, remove from set, remove from balacing?, keep track of size
+        // of sets
+        let old_vruntime;
+        {
+            let mut state = self.state.as_ref().unwrap().write();
+            let procstate = state.get_mut(&pid).unwrap();
+            old_vruntime = procstate.vruntime;
+        }
+        let remove_val = (old_vruntime, pid);
+
+        let mut map = self.map.as_ref().unwrap().write();
+        let cpu = map.get(&pid).unwrap().get_cpu();
+        {
+            let all_cpu_state = self.cpu_state.as_ref().unwrap().read();
+            let mut cpu_state = all_cpu_state.get(&cpu).unwrap().write();
+            let mut real_set = &mut cpu_state.set;
+            real_set.remove(&remove_val);
+            if cpu_state.curr == Some(pid) {
+                cpu_state.curr = None;
+            }
+
+        }
+        map.remove(&pid);
     }
 
     fn pick_next_task(&self, cpu: i32) -> Option<Schedulable> {
@@ -405,12 +508,32 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         self.update_curr(cpu);
         let all_cpu_state = self.cpu_state.as_ref().unwrap().read();
         let mut cpu_state = all_cpu_state.get(&(cpu as u32)).unwrap().write();
+        let curr_reintro = if let Some(curr) = cpu_state.curr {
+            let state = self.state.as_ref().unwrap().read();
+            let proc_state = state.get(&curr).unwrap();
+            Some((proc_state.vruntime, curr))
+        } else {
+            None
+        };
+        //if let Some(curr) = cpu_state.curr {
+        //let curr_vruntime = {
+        //    let proc_state = state.get(&cpu_state.curr).unwrap();
+        //    proc_state.vruntime
+        //};
+
         let set = &mut cpu_state.set;
         //let sets_list = self.sets_list.as_ref().unwrap().read();
         //let mut set = sets_list.get(&(cpu as u32)).unwrap().write();
         //getnstimeofday64_rs(&mut step1);
         //let mut set = self.set.as_ref().unwrap().write();
         //if set.len() > 0 {
+        //if cpu == 5 && !set.is_empty() {
+        //    println!("cpu {} picking from {:?}", cpu, set);
+        //}
+        if let Some(curr_val) = curr_reintro {
+            //println!("reintroducing {:?}", curr_val);
+            set.insert(curr_val);
+        }
         if let Some((vruntime, pid)) = set.pop_first() {
         //if let Some((vruntime, pid)) = set.first() {
             //let mut set = &mut cpu_state.set;
@@ -428,6 +551,11 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
             if (sched_opt.unwrap().get_cpu() == cpu as u32 ||
                 sched_opt.unwrap().get_cpu() == u32::MAX) {
                 let num_waiting = set.len();
+                if let Some(curr_val) = curr_reintro {
+                    //if cpu == 0 {
+                    //println!("would reintro {:?}", curr_val);
+                    //}
+                }
                 //println!("removed {} from tree", pid);
 
                 //println!("tree would cpu {} pick {}", cpu, pid);
@@ -436,6 +564,7 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
                 // None shouldn't happen anymore
                 //getnstimeofday64_rs(&mut step2);
                 //let period: u64 = if num_waiting > 7 {
+                if num_waiting > 1 {
                 let period: u64 = if num_waiting > 8 {
                     //(num_waiting as u64 + 1) * 750000
                     (num_waiting as u64) * 750000
@@ -481,11 +610,9 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
                 let slice = slice_calc >> 32;
                 //println!("w {} total w {}, w shift {}, tw shift {}, inv {}, factor {}, slice_calc {}, slice {}",
                  //        weight, total_weight, weight_shift, total_weight_shift, inv_weight, factor, slice_calc, slice);
-               // getnstimeofday64_rs(&mut step4);
-                if num_waiting > 1 {
+                //getnstimeofday64_rs(&mut step4);
                     hrtick::hrtick_start(cpu, slice);
                 }
-                //getnstimeofday64_rs(&mut end);
                 //let should_report = REPORT.load(core::sync::atomic::Ordering::Relaxed);
                 //if (should_report % 10000 == 0) {
                 //    let diff1 = diff_ns(&step1, &start);
@@ -499,16 +626,33 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
                 //    let diff3 = diff_ns(&step3, &step24);
                 //    let diff4 = diff_ns(&step4, &step3);
                 //    let diff5 = diff_ns(&end, &step4);
-                //    //let diff = diff_ns(&end, &start);
                 //    println!("pnt inner took {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}", diff1, diff11, diff12, diff2, diff21, diff22, diff23, diff24, diff3, diff4, diff5, num_waiting);
-                //    //println!("pnt inner took {}", diff);
                 //}
                 //REPORT.store(should_report + 1, core::sync::atomic::Ordering::SeqCst);
                 cpu_state.curr = Some(sched_opt.unwrap().get_pid());
                 cpu_state.exec_start = unsafe {
                     bento::bindings::cpu_clock_task(cpu)
                 };
-                //println!("pick next task will return {} for cpu {} set len {}", sched_opt.unwrap().get_pid(), cpu, num_waiting);
+                //getnstimeofday64_rs(&mut end);
+                //let diff = diff_ns(&end, &start);
+                //if diff > 1000 {
+                //println!("pnt inner took {}", diff);
+                //    let diff1 = diff_ns(&step1, &start);
+                //    let diff11 = diff_ns(&step11, &step1);
+                //    let diff12 = diff_ns(&step12, &step11);
+                //    let diff2 = diff_ns(&step2, &step12);
+                //    let diff21 = diff_ns(&step21, &step2);
+                //    let diff22 = diff_ns(&step22, &step21);
+                //    let diff23 = diff_ns(&step23, &step22);
+                //    let diff24 = diff_ns(&step24, &step23);
+                //    let diff3 = diff_ns(&step3, &step24);
+                //    let diff4 = diff_ns(&step4, &step3);
+                //    let diff5 = diff_ns(&end, &step4);
+                //    println!("pnt inner took {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}", diff1, diff11, diff12, diff2, diff21, diff22, diff23, diff24, diff3, diff4, diff5, num_waiting);
+                //}
+                //if cpu == 0 {
+                //println!("pick next task will return {} for cpu {} runtime {}", sched_opt.unwrap().get_pid(), cpu, vruntime);
+                //}
                 return Some(sched_opt.unwrap());
             } else {
                 //println!("can't schedule on other cpu\n");
@@ -550,43 +694,103 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
             //    return None;
             //}
         }
+            //if cpu == 0 {
+            //println!("cpu {} is empty", cpu);
+            //}
         cpu_state.curr = None;
         return None;
         }
     }
 
-    fn pnt_err(&self, sched: Schedulable) {
-        println!("pnt err insert {} {}", sched.get_pid(), sched.get_cpu());
-        let mut map = self.map.as_ref().unwrap().write();
-        map.insert(sched.get_pid(), sched);
-        let cpu_state = self.cpu_state.as_ref().unwrap().read();
-        if cpu_state.get(&(sched.get_cpu() as u32)).is_none() {
-            println!("pnt err cpu is {}", sched.get_cpu());
+    fn pnt_err(&self, cpu: i32, _pid: u64, err: i32, _sched: Option<Schedulable>) {
+        //println!("pnt err insert {} {} {}", _pid, cpu, err);
+        if err == 2 {
+            let sched = _sched.unwrap();
+            //println!("pnt err insert {} {}", sched.get_pid(), sched.get_cpu());
+            let mut map = self.map.as_ref().unwrap().write();
+            map.insert(sched.get_pid(), sched);
+            let cpu_state = self.cpu_state.as_ref().unwrap().read();
+            if cpu_state.get(&(sched.get_cpu() as u32)).is_none() {
+                println!("pnt err cpu is {}", sched.get_cpu());
+            }
         }
+        //if err == 1 {
+        let all_cpu_state = self.cpu_state.as_ref().unwrap().read();
+        let mut cpu_state = all_cpu_state.get(&(cpu as u32)).unwrap().write();
+        cpu_state.curr = None;
+        //}
+        // If err == 1, the process is actually unschedulable. Dead without telling us for some
+        // reason
     }
 
-    fn select_task_rq(&self, pid: u64) -> i32 {
+    fn balance_err(&self, _cpu: i32, pid: u64, _err: i32, _sched: Option<Schedulable>) {
+        let mut balancing = self.balancing.as_ref().unwrap().write();
+        balancing.remove(&pid);
+    }
+
+    fn select_task_rq(&self, pid: u64, waker_cpu: i32, prev_cpu: i32) -> i32 {
+        //{
+        //    let mut map = self.map.as_ref().unwrap().write();
+        //    if let Some(sched) = map.get(&pid) {
+        //        return sched.get_cpu() as i32;
+        //    }
+        //}
+        //let cpu_state = self.cpu_state.as_ref().unwrap().read();
+        //let mut cpu = 0;
+        //let mut smallest_size = 1000;
+        //if let Some(lock) = cpu_state.get(&0) {
+        //    let state = lock.read();
+        //    let set = &state.set;
+        //    if set.is_empty() {
+        //        return 0;
+        //    }
+        //    cpu = 0;
+        //    smallest_size = set.len();
+        //}
+        //for i in 1..6 {
+        //    if let Some(lock) = cpu_state.get(&(i as u32)) {
+        //        let state = lock.read();
+        //        let set = &state.set;
+        //        if set.is_empty() {
+        //            return i;
+        //        }
+        //        if set.len() < smallest_size {
+        //            cpu = i;
+        //            smallest_size = set.len();
+        //        }
+        //    }
+        //}
+        //return cpu;
+
         let mut map = self.map.as_ref().unwrap().write();
-        //*map.get(&pid).unwrap_or(&1) as i32
         match map.get(&pid) {
             None => {
                 //map.insert(pid, pid as u32 % 2);
+                //println!("would pick {}, waker {}, prev {}", pid % 6, waker_cpu, prev_cpu);
                 pid as i32 % 6
+                //4
+                //prev_cpu
             },
             //None => 5,
-            Some(sched) => sched.get_cpu() as i32,
+            Some(sched) => {
+                //println!("moving {} {} to {}", pid, prev_cpu, waker_cpu);
+                sched.get_cpu() as i32
+            },
         }
     }
 
     fn selected_task_rq(&self, sched: Schedulable) {
         //println!("selected {} {}", sched.get_pid(), sched.get_cpu());
         //let mut state = self.state.as_ref().unwrap().write();
-        let mut map = self.map.as_ref().unwrap().write();
-        map.insert(sched.get_pid(), sched);
-        let cpu_state = self.cpu_state.as_ref().unwrap().read();
-        if cpu_state.get(&(sched.get_cpu() as u32)).is_none() {
-            println!("selected cpu is {}", sched.get_cpu());
-        }
+        //let mut map = self.map.as_ref().unwrap().write();
+        //if map.get(&sched.get_pid()).is_none() {
+        //    map.insert(sched.get_pid(), sched);
+        //}
+        //map.insert(sched.get_pid(), sched);
+        //let cpu_state = self.cpu_state.as_ref().unwrap().read();
+        //if cpu_state.get(&(sched.get_cpu() as u32)).is_none() {
+        //    println!("selected cpu is {}", sched.get_cpu());
+        //}
     }
 
     //fn migrate_task_rq(&self, pid: u64, new_cpu: i32) {
@@ -607,13 +811,18 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         let old_cpu = old_sched.get_cpu();
         //println!("migrate old cpu {}", old_cpu);
         let all_cpu_state = self.cpu_state.as_ref().unwrap().read();
-        {
+        if old_cpu != u32::MAX {
             let mut cpu_state = all_cpu_state.get(&old_cpu).unwrap().write();
             //let mut real_set = cpu_state.set.get(&cpu).unwrap().write();
             let mut real_set = &mut cpu_state.set;
             let was_in = real_set.remove(&(vruntime, pid));
             //println!("did remove old sched {}", was_in);
+            //println!("removed from set {:?}", real_set);
             self.remove_weight(&mut cpu_state, prio);
+            cpu_state.free_time = 0;
+            if Some(pid) == cpu_state.curr {
+                cpu_state.curr = None;
+            }
         }
         map.insert(pid, sched);
         //let cpu_state = self.cpu_state.as_ref().unwrap().read();
@@ -625,15 +834,150 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         //    //let mut real_set = cpu_state.set.get(&cpu).unwrap().write();
             let mut real_set = &mut cpu_state.set;
             real_set.insert((vruntime, pid));
+            //println!("added to set {:?}", real_set);
             self.add_weight(&mut cpu_state, prio);
+            cpu_state.free_time = 0;
         }
+        let mut balancing = self.balancing.as_ref().unwrap().write();
+        balancing.remove(&pid);
     }
 
     fn task_affinity_changed(&self, pid: u64, cpumask: u64) {
-        println!("changing affinity for {} {}", pid, cpumask);
+        //println!("changing affinity for {} {}", pid, cpumask);
+        let mut locked = self.locked.as_ref().unwrap().write();
+        locked.insert(pid);
     }
 
     fn balance(&self, cpu: i32) -> Option<u64> {
+        //return None;
+        let cpu_state = self.cpu_state.as_ref().unwrap().read();
+        if cpu_state.get(&(cpu as u32)).is_none() {
+            //println!("balance no set");
+        } else if let Some(lock) = cpu_state.get(&(cpu as u32)) {
+            let state = lock.read();
+        //    if state.free_time == 0 {
+        //        return None;
+        //    } else {
+        //        //let mut min_cpu = None;
+        //        let mut min_free_time = state.free_time;
+        //        let mut pid = None;
+        //        for i in 0..6 {
+        //            if i == cpu {
+        //                continue;
+        //            }
+        //            if let Some(lock2) = cpu_state.get(&(i as u32)) {
+        //                let state2 = lock2.read();
+        //                if (state2.free_time + 10) < min_free_time {
+        //                    //min_cpu = Some(i);
+        //                    let mut balancing = self.balancing.as_ref().unwrap().write();
+        //                    let set2 = &state2.set;
+        //                    let opt_pid = set2.last().and_then(|(_, p)| Some(*p));
+        //                    if let Some(choice_pid) = opt_pid {
+        //                        if !balancing.contains(&choice_pid) {
+        //                            min_free_time = state2.free_time;
+        //                            pid = opt_pid;
+        //                            balancing.insert(choice_pid);
+        //                        }
+        //                    }
+        //                }
+        //            }
+        //        }
+        //        if pid.is_some() {
+        //        println!("core {} wanting to move pid {:?}", cpu, pid);
+        //        }
+        //        return pid;
+        //    }
+        //}
+        //                let set2 = &state2.set;
+        //                if set2.len() > 1 {
+        //                    for (_, pid) in set2 {
+        //                        let mut balancing = self.balancing.as_ref().unwrap().write();
+        //                        if Some(*pid) != state2.curr && !balancing.contains(pid) {
+        //                            //println!("balance wants to move to empty set {}", *pid);
+        //                            balancing.insert(*pid);
+        //                            //return None;
+        //                            return Some(*pid);
+        //                        }
+        //                    }
+        //                    //if set2.last() != state2.curr {
+        //                    //}
+        //                    //println!("balance wants to move to empty set");
+        //                    //break;
+        //                }
+        //            }
+            //}
+            let self_free = state.free_time;
+            let idle = state.curr.is_none();
+            let set = &state.set;
+            //println!("cpu {} set len {} idle {}", cpu, set.len(), idle);
+            if set.is_empty() && idle {
+                //println!("balance found blank cpu {}", cpu);
+                let mut max_cpu = None;
+                let mut max_tasks = 0;
+                let mut balance_pid = None;
+                let mut other_free = 0;
+                for i in 0..6 {
+                    if i == cpu {
+                        continue;
+                    }
+                    if let Some(lock2) = cpu_state.get(&(i as u32)) {
+                        let state2 = lock2.read();
+                        let idle2 = state2.curr.is_none();
+                        let set2 = &state2.set;
+                        //println!("set len {}", set2.len());
+                        if set2.len() > max_tasks && !(idle2 && set2.len() == 1) {
+                            //println!("checking set for core {} {:?}", i, set2);
+                            for (_, pid) in set2 {
+                                let mut balancing = self.balancing.as_ref().unwrap().write();
+                                let mut locked = self.locked.as_ref().unwrap().read();
+                                if Some(*pid) != state2.curr && !balancing.contains(pid) && !locked.contains(pid) {
+                                    max_cpu = Some(i);
+                                    max_tasks = set2.len();
+                                    balance_pid = Some(*pid);
+                                    balancing.insert(*pid);
+                                    other_free = state2.free_time;
+                                    break;
+                                } else {
+                                    //if Some(*pid) == state2.curr {
+                                    //    //println!("is curr");
+                                    //}
+                                    //if balancing.contains(pid) {
+                                    //    println!("already balancing pid");
+                                    //}
+                                    //if locked.contains(pid) {
+                                    //    println!("cannot move pid");
+                                    //}
+                                }
+                            }
+                        //let opt_pid = set2.last().and_then(|(_, p)| Some(*p));
+                            //max_cpu = Some(i);
+                            //balance_pid = set2.first().
+                        }
+                        //if set2.len() > 1 {
+                            
+        //                    for (_, pid) in set2 {
+        //                        let mut balancing = self.balancing.as_ref().unwrap().write();
+        //                        if Some(*pid) != state2.curr && !balancing.contains(pid) {
+        //                            //println!("balance wants to move to empty set {}", *pid);
+        //                            balancing.insert(*pid);
+        //                            //return None;
+        //                            return Some(*pid);
+        //                        }
+        //                    }
+        //                    //if set2.last() != state2.curr {
+        //                    //}
+        //                    //println!("balance wants to move to empty set");
+        //                    //break;
+        //                }
+                    }
+                }
+                if balance_pid.is_some() {
+                //println!("balacing {:?} from {:?} to {}", balance_pid, max_cpu, cpu);
+                }
+                return balance_pid;
+                //return None;
+            }
+        }
         //if cpu != 1 {
         //    return None;
         //}
@@ -657,7 +1001,9 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         &self, pid: u64, runtime: u64,
         _cpu_seqnum: u64, cpu: i32, _from_switchto: i8, sched: Schedulable
     ) {
+        if cpu == 0 {
         //println!("yielding {} {}", pid, cpu);
+        }
         //let mut new_sched = false;
         //{
         //    let mut state = self.state.as_ref().unwrap().write();
@@ -679,7 +1025,14 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         let mut state = self.state.as_ref().unwrap().write();
         let proc_state = state.get_mut(&pid).unwrap();
         let old_vruntime = proc_state.vruntime;
-        proc_state.vruntime = calculate_vruntime(runtime, proc_state.prio);
+        let delta_runtime = runtime - proc_state.last_runtime;
+        proc_state.vruntime += calculate_vruntime(delta_runtime, proc_state.prio);
+            //let other_vruntime = calculate_vruntime(runtime, proc_state.prio);
+            //if other_vruntime != proc_state.vruntime {
+            //    println!("yield old vruntime {} new {}", other_vruntime, proc_state.vruntime);
+            //}
+        //proc_state.vruntime = calculate_vruntime(runtime, proc_state.prio);
+        proc_state.last_runtime = runtime;
         let cpu = sched.get_cpu();
 
         let all_cpu_state = self.cpu_state.as_ref().unwrap().read();
@@ -688,6 +1041,9 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         let remove_val = (old_vruntime, pid);
         real_set.remove(&remove_val);
         real_set.insert((proc_state.vruntime, pid));
+        if cpu_state.curr == Some(pid) {
+            cpu_state.curr = None;
+        }
         //if new_sched {
         //    self.add_weight(&mut cpu_state, proc_state.prio);
         //}
