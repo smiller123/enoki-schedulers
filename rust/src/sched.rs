@@ -70,6 +70,8 @@ pub struct CpuState {
     pub exec_start: u64,
     pub set: BTreeSet<(u64, u64)>,
     pub free_time: u64,
+    pub load: u8,
+    pub capacity: u8,
 }
 
 pub struct UpgradeData {
@@ -527,13 +529,23 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         //getnstimeofday64_rs(&mut step1);
         //let mut set = self.set.as_ref().unwrap().write();
         //if set.len() > 0 {
-        //if cpu == 5 && !set.is_empty() {
-        //    println!("cpu {} picking from {:?}", cpu, set);
-        //}
         if let Some(curr_val) = curr_reintro {
             //println!("reintroducing {:?}", curr_val);
             set.insert(curr_val);
         }
+        if set.len() > 1 {
+            //println!("cpu {} set len {}", cpu, set.len());
+        }
+        //if set.len() == 0 {
+        //    cpu_state.load = 0;
+        //}
+        //cpu_state.load = cpu_state.load << 1;
+        //if set.len() > 1 {
+        //    cpu_state.load = cpu_state.load & 1;
+        //}
+        //if !set.is_empty() {
+       //     println!("cpu {} picking from {:?}", cpu, set);
+        //}
         if let Some((vruntime, pid)) = set.pop_first() {
         //if let Some((vruntime, pid)) = set.first() {
             //let mut set = &mut cpu_state.set;
@@ -564,7 +576,8 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
                 // None shouldn't happen anymore
                 //getnstimeofday64_rs(&mut step2);
                 //let period: u64 = if num_waiting > 7 {
-                if num_waiting > 1 {
+                //if num_waiting > 1 {
+                if num_waiting >= 1 {
                 let period: u64 = if num_waiting > 8 {
                     //(num_waiting as u64 + 1) * 750000
                     (num_waiting as u64) * 750000
@@ -651,8 +664,14 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
                 //    println!("pnt inner took {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}", diff1, diff11, diff12, diff2, diff21, diff22, diff23, diff24, diff3, diff4, diff5, num_waiting);
                 //}
                 //if cpu == 0 {
-                //println!("pick next task will return {} for cpu {} runtime {}", sched_opt.unwrap().get_pid(), cpu, vruntime);
+        //        println!("pick next task will return {} for cpu {} runtime {}", sched_opt.unwrap().get_pid(), cpu, vruntime);
                 //}
+                cpu_state.load = cpu_state.load << 1;
+                cpu_state.capacity = cpu_state.capacity << 1;
+                if num_waiting >= 1 {
+                    cpu_state.load = cpu_state.load | 1;
+                    //println!("new load is {:b}", cpu_state.load);
+                }
                 return Some(sched_opt.unwrap());
             } else {
                 //println!("can't schedule on other cpu\n");
@@ -697,6 +716,12 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
             //if cpu == 0 {
             //println!("cpu {} is empty", cpu);
             //}
+        //cpu_state.load = 0;
+        //cpu_state.load = 0;
+        cpu_state.load = cpu_state.load << 1;
+        //cpu_state.load = 0;
+        cpu_state.capacity = cpu_state.capacity << 1;
+        cpu_state.capacity = cpu_state.capacity | 1;
         cpu_state.curr = None;
         return None;
         }
@@ -736,31 +761,45 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         //    }
         //}
         //let cpu_state = self.cpu_state.as_ref().unwrap().read();
-        //let mut cpu = 0;
-        //let mut smallest_size = 1000;
-        //if let Some(lock) = cpu_state.get(&0) {
+        //let mut cpu = pid % 6;
+        ////let mut smallest_size = 1000;
+        //let mut largest_capacity = 0;
+        //if let Some(lock) = cpu_state.get(&(cpu as u32)) {
         //    let state = lock.read();
-        //    let set = &state.set;
-        //    if set.is_empty() {
-        //        return 0;
+        //    if state.capacity.count_ones() == 8 {
+        //        return cpu as i32;
         //    }
-        //    cpu = 0;
-        //    smallest_size = set.len();
+        //    largest_capacity = state.capacity.count_ones();
+        //    //let set = &state.set;
+        //    //if set.is_empty() {
+        //    //    return cpu as i32;
+        //    //}
+        //    //cpu = 0;
+        //    //smallest_size = set.len();
         //}
-        //for i in 1..6 {
+        //for i in 0..6 {
+        //    if i == pid % 6 {
+        //        continue;
+        //    }
         //    if let Some(lock) = cpu_state.get(&(i as u32)) {
         //        let state = lock.read();
-        //        let set = &state.set;
-        //        if set.is_empty() {
-        //            return i;
+        //        //let set = &state.set;
+        //        if state.capacity.count_ones() == 8 {
+        //            return i as i32;
         //        }
-        //        if set.len() < smallest_size {
+        //    //smallest_size = state.capacity.count_ones();
+        //        //if set.is_empty() {
+        //        //    return i as i32;
+        //        //}
+        //        //if set.len() < smallest_size {
+        //        if state.capacity.count_ones() > largest_capacity {
         //            cpu = i;
-        //            smallest_size = set.len();
+        //            largest_capacity = state.capacity.count_ones();
+        //            //smallest_size = set.len();
         //        }
         //    }
         //}
-        //return cpu;
+        //return cpu as i32;
 
         let mut map = self.map.as_ref().unwrap().write();
         match map.get(&pid) {
@@ -820,6 +859,8 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
             //println!("removed from set {:?}", real_set);
             self.remove_weight(&mut cpu_state, prio);
             cpu_state.free_time = 0;
+            //cpu_state.load = 0;
+            cpu_state.load = cpu_state.load << 1;
             if Some(pid) == cpu_state.curr {
                 cpu_state.curr = None;
             }
@@ -837,6 +878,8 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
             //println!("added to set {:?}", real_set);
             self.add_weight(&mut cpu_state, prio);
             cpu_state.free_time = 0;
+            //cpu_state.capacity = 0;
+            cpu_state.capacity = cpu_state.capacity << 1;
         }
         let mut balancing = self.balancing.as_ref().unwrap().write();
         balancing.remove(&pid);
@@ -910,12 +953,18 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
             let idle = state.curr.is_none();
             let set = &state.set;
             //println!("cpu {} set len {} idle {}", cpu, set.len(), idle);
-            if set.is_empty() && idle {
-                //println!("balance found blank cpu {}", cpu);
+            //if set.is_empty() && idle && state.load == 0 && state.capacity.count_ones() >= 6 {
+            //if state.load == 0 && state.capacity.count_ones() >= 6 {
+            if state.capacity.count_ones() >= 6 {
+            //if set.is_empty() && idle {
+                //println!("balance found blank cpu {} load {} capacity {}", cpu, state.load, state.capacity.count_ones());
+                //return None;
                 let mut max_cpu = None;
-                let mut max_tasks = 0;
+                //let mut max_tasks = 0;
+                //let mut max_load = 0;
+                let mut max_load = state.load.count_ones();
                 let mut balance_pid = None;
-                let mut other_free = 0;
+                //let mut other_free = 0;
                 for i in 0..6 {
                     if i == cpu {
                         continue;
@@ -924,35 +973,54 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
                         let state2 = lock2.read();
                         let idle2 = state2.curr.is_none();
                         let set2 = &state2.set;
-                        //println!("set len {}", set2.len());
-                        if set2.len() > max_tasks && !(idle2 && set2.len() == 1) {
-                            //println!("checking set for core {} {:?}", i, set2);
+                //        if set2.len() > max_tasks && !(idle2 && set2.len() == 1) {
+                        if state2.load.count_ones() > max_load && !(idle2 && set2.len() == 1) && state2.capacity.count_ones() < state.capacity.count_ones() {
                             for (_, pid) in set2 {
-                                let mut balancing = self.balancing.as_ref().unwrap().write();
+                                let mut balancing = self.balancing.as_ref().unwrap().read();
                                 let mut locked = self.locked.as_ref().unwrap().read();
                                 if Some(*pid) != state2.curr && !balancing.contains(pid) && !locked.contains(pid) {
                                     max_cpu = Some(i);
-                                    max_tasks = set2.len();
+                        //            max_tasks = set2.len();
+                                    max_load = state2.load.count_ones();
                                     balance_pid = Some(*pid);
-                                    balancing.insert(*pid);
-                                    other_free = state2.free_time;
+                        //            balancing.insert(*pid);
+                         //           return balance_pid;
+                                    //other_free = state2.free_time;
                                     break;
-                                } else {
-                                    //if Some(*pid) == state2.curr {
-                                    //    //println!("is curr");
-                                    //}
-                                    //if balancing.contains(pid) {
-                                    //    println!("already balancing pid");
-                                    //}
-                                    //if locked.contains(pid) {
-                                    //    println!("cannot move pid");
-                                    //}
                                 }
                             }
-                        //let opt_pid = set2.last().and_then(|(_, p)| Some(*p));
-                            //max_cpu = Some(i);
-                            //balance_pid = set2.first().
                         }
+                        //if state2.load != 0 {
+                        //    println!("core {} set len {}, set load {:b}", i, set2.len(), state2.load);
+                        //}
+                        //if set2.len() > max_tasks && !(idle2 && set2.len() == 1) {
+                        //    println!("checking set for core {} idle {} {:?}", i, idle2, set2);
+                        //    for (_, pid) in set2 {
+                        //        let mut balancing = self.balancing.as_ref().unwrap().write();
+                        //        let mut locked = self.locked.as_ref().unwrap().read();
+                        //        if Some(*pid) != state2.curr && !balancing.contains(pid) && !locked.contains(pid) {
+                        //            max_cpu = Some(i);
+                        //            max_tasks = set2.len();
+                        //            balance_pid = Some(*pid);
+                        //            balancing.insert(*pid);
+                        //            other_free = state2.free_time;
+                        //            break;
+                        //        } else {
+                        //            //if Some(*pid) == state2.curr {
+                        //            //    //println!("is curr");
+                        //            //}
+                        //            //if balancing.contains(pid) {
+                        //            //    println!("already balancing pid");
+                        //            //}
+                        //            //if locked.contains(pid) {
+                        //            //    println!("cannot move pid");
+                        //            //}
+                        //        }
+                        //    }
+                        ////let opt_pid = set2.last().and_then(|(_, p)| Some(*p));
+                        //    //max_cpu = Some(i);
+                        //    //balance_pid = set2.first().
+                        //}
                         //if set2.len() > 1 {
                             
         //                    for (_, pid) in set2 {
@@ -971,8 +1039,10 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         //                }
                     }
                 }
-                if balance_pid.is_some() {
-                //println!("balacing {:?} from {:?} to {}", balance_pid, max_cpu, cpu);
+                if let Some(bpid) = balance_pid {
+                ////println!("balacing {:?} from {:?} to {}", balance_pid, max_cpu, cpu);
+                    let mut balancing = self.balancing.as_ref().unwrap().write();
+                    balancing.insert(bpid);
                 }
                 return balance_pid;
                 //return None;

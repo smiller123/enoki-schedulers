@@ -82,6 +82,8 @@ pub fn rust_main(record_file: *const i8) {
               //  leftmost: (u64::MAX, u64::MAX),
                 set: BTreeSet::new(),
                 free_time: 0,
+                load: 0,
+                capacity: 0xff,
                 //set: RBTree::new(),
              //   fake_set: BTreeSet::new(),
             };
@@ -95,6 +97,8 @@ pub fn rust_main(record_file: *const i8) {
             //leftmost: (u64::MAX, u64::MAX),
             set: BTreeSet::new(),
             free_time: 0,
+            load: 0,
+            capacity: 0xff,
             //set: RBTree::new(),
             //fake_set: BTreeSet::new(),
         };
