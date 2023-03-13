@@ -8,6 +8,7 @@
 #![allow(improper_ctypes)]
 #![feature(const_btree_new)]
 #![feature(map_first_last)]
+#![feature(let_chains)]
 #![no_std]
 
 extern crate alloc;
@@ -52,6 +53,7 @@ pub static mut BENTO_SCHED: BentoSched = BentoSched {
     map: None,
     state: None,
     balancing: None,
+    balancing_cpus: None,
     cpu_state: None,
     user_q: None,
     rev_q: None,
@@ -84,6 +86,7 @@ pub fn rust_main(record_file: *const i8) {
                 free_time: 0,
                 load: 0,
                 capacity: 0xff,
+                should_report: 0,
                 //set: RBTree::new(),
              //   fake_set: BTreeSet::new(),
             };
@@ -99,6 +102,7 @@ pub fn rust_main(record_file: *const i8) {
             free_time: 0,
             load: 0,
             capacity: 0xff,
+            should_report: 0,
             //set: RBTree::new(),
             //fake_set: BTreeSet::new(),
         };
@@ -107,6 +111,7 @@ pub fn rust_main(record_file: *const i8) {
         BENTO_SCHED.map = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.state = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.balancing = Some(RwLock::new(BTreeSet::new()));
+        BENTO_SCHED.balancing_cpus = Some(RwLock::new(BTreeSet::new()));
         BENTO_SCHED.locked = Some(RwLock::new(BTreeSet::new()));
         BENTO_SCHED.cpu_state = Some(RwLock::new(cpu_state));
         BENTO_SCHED.user_q = Some(RwLock::new(None));
