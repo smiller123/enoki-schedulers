@@ -50,8 +50,8 @@ pub struct BentoSched {
     pub map: Option<RwLock<BTreeMap<u64, Schedulable>>>,
     pub state: Option<RwLock<BTreeMap<u64, ProcessState>>>,
     pub cpu_state: Option<RwLock<BTreeMap<u32, RwLock<CpuState>>>>,
-    pub user_q: Option<RwLock<Option<RingBuffer<UserMessage>>>>,
-    pub rev_q: Option<RwLock<Option<RingBuffer<UserMessage>>>>,
+    pub user_q: Option<RwLock<BTreeMap<i32, RingBuffer<UserMessage>>>>,
+    pub rev_q: Option<RwLock<BTreeMap<i32, RingBuffer<UserMessage>>>>,
     pub balancing: Option<RwLock<BTreeSet<u64>>>,
     pub balancing_cpus: Option<RwLock<BTreeSet<u32>>>,
     pub locked: Option<RwLock<BTreeSet<u64>>>,
@@ -83,7 +83,7 @@ pub struct UpgradeData {
     map: Option<RwLock<BTreeMap<u64, Schedulable>>>
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub struct UserMessage {
     val: i32
 }
@@ -1301,54 +1301,58 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         }
     }
 
-    fn register_queue(&self, q: RingBuffer<UserMessage>) {
+    fn register_queue(&self, q: RingBuffer<UserMessage>) -> i32 {
         //println!("q ptr {:?}", q.inner);
         //println!("q ptr {:?}", (*q.inner).offset);
         //println!("q capacity {}", (*q.inner).capacity);
         //println!("q readptr {}", (*q.inner).readptr);
         //println!("q writeptr {}", (*q.inner).writeptr);
         let mut user_q = self.user_q.as_ref().unwrap().write();
-        user_q.replace(q);
+        let next = user_q.keys().max().map_or(0, |max| max + 1);
+        user_q.insert(next as i32, q);
+        return next as i32;
 
         //self.user_q = Some(RwLock::new(q));
     }
 
-    fn register_reverse_queue(&self, q: RingBuffer<UserMessage>) {
+    fn register_reverse_queue(&self, q: RingBuffer<UserMessage>) -> i32 {
         //println!("q ptr {:?}", q.inner);
         //println!("q ptr {:?}", (*q.inner).offset);
         //println!("q capacity {}", (*q.inner).capacity);
         //println!("q readptr {}", (*q.inner).readptr);
         //println!("q writeptr {}", (*q.inner).writeptr);
         let mut rev_q = self.rev_q.as_ref().unwrap().write();
-        rev_q.replace(q);
+        let next = rev_q.keys().max().map_or(0, |max| max + 1);
+        rev_q.insert(next as i32, q);
+        return next as i32;
 
         //self.user_q = Some(RwLock::new(q));
     }
 
-    fn enter_queue(&self, entries: u32) {
-        let mut user_q_guard = self.user_q.as_ref().unwrap().write();
-        let user_q = user_q_guard.as_mut().unwrap();
+    fn enter_queue(&self, id: i32, entries: u32) {
+        let mut user_q_list = self.user_q.as_ref().unwrap().write();
+        let user_q = user_q_list.get_mut(&id).unwrap();
         for i in 0..entries {
         //unsafe {
         //println!("user_q head {}", (*user_q.inner).writeptr);
         //println!("user_q tail {}", (*user_q.inner).readptr);
         //}
             let msg = user_q.dequeue();
-        //println!("msg val {:?}", msg);
+        println!("msg val {:?}", msg);
         }
     }
 
-    fn unregister_queue(&self) -> RingBuffer<UserMessage> {
+    fn unregister_queue(&self, id: i32) -> RingBuffer<UserMessage> {
         let mut user_q = self.user_q.as_ref().unwrap().write();
-        let q = user_q.take();
+        let q = user_q.remove(&id);
         println!("freeing queue");
         // We must have a q or this won't be called
         q.unwrap()
     }
 
-    fn unregister_rev_queue(&self) -> RingBuffer<UserMessage> {
+    fn unregister_rev_queue(&self, id: i32) -> RingBuffer<UserMessage> {
         let mut rev_q = self.rev_q.as_ref().unwrap().write();
-        let q = rev_q.take();
+        let q = rev_q.remove(&id);
         println!("freeing queue");
         // We must have a q or this won't be called
         q.unwrap()

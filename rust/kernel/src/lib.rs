@@ -114,8 +114,8 @@ pub fn rust_main(record_file: *const i8) {
         BENTO_SCHED.balancing_cpus = Some(RwLock::new(BTreeSet::new()));
         BENTO_SCHED.locked = Some(RwLock::new(BTreeSet::new()));
         BENTO_SCHED.cpu_state = Some(RwLock::new(cpu_state));
-        BENTO_SCHED.user_q = Some(RwLock::new(None));
-        BENTO_SCHED.rev_q = Some(RwLock::new(None));
+        BENTO_SCHED.user_q = Some(RwLock::new(BTreeMap::new()));
+        BENTO_SCHED.rev_q = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.register();
         //let this_mod = BentoGhostModule {};
         //Ok(this_mod)
