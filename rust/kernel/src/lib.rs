@@ -80,7 +80,6 @@ pub fn rust_main(record_file: *const i8) {
                 weight: 0,
                 inv_weight: 0,
                 curr: None,
-                exec_start: 0,
               //  leftmost: (u64::MAX, u64::MAX),
                 set: BTreeSet::new(),
                 free_time: 0,
@@ -96,7 +95,6 @@ pub fn rust_main(record_file: *const i8) {
             weight: 0,
             inv_weight: 0,
             curr: None,
-            exec_start: 0,
             //leftmost: (u64::MAX, u64::MAX),
             set: BTreeSet::new(),
             free_time: 0,
@@ -110,12 +108,12 @@ pub fn rust_main(record_file: *const i8) {
 //        BENTO_SCHED.sets_list = Some(RwLock::new(sets_list));
         BENTO_SCHED.map = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.state = Some(RwLock::new(BTreeMap::new()));
-        BENTO_SCHED.balancing = Some(RwLock::new(BTreeSet::new()));
-        BENTO_SCHED.balancing_cpus = Some(RwLock::new(BTreeSet::new()));
-        BENTO_SCHED.locked = Some(RwLock::new(BTreeSet::new()));
         BENTO_SCHED.cpu_state = Some(RwLock::new(cpu_state));
         BENTO_SCHED.user_q = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.rev_q = Some(RwLock::new(BTreeMap::new()));
+        BENTO_SCHED.balancing = Some(RwLock::new(BTreeSet::new()));
+        BENTO_SCHED.balancing_cpus = Some(RwLock::new(BTreeMap::new()));
+        BENTO_SCHED.locked = Some(RwLock::new(BTreeSet::new()));
         BENTO_SCHED.register();
         //let this_mod = BentoGhostModule {};
         //Ok(this_mod)
