@@ -888,12 +888,14 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         // reason
     }
 
-    fn balance_err(&self, _cpu: i32, pid: u64, _err: i32, _sched: Option<Schedulable>, _guard: RQLockGuard) {
+    fn balance_err(&self, _cpu: i32, pid: u64, err: i32, _sched: Option<Schedulable>, _guard: RQLockGuard) {
         //let mut map = self.map.as_ref().unwrap().write();
         //let old_sched = map.get(&pid).unwrap();
         //let old_cpu = old_sched.get_cpu();
-        let mut balancing = self.balancing.as_ref().unwrap().write();
-        balancing.remove(&pid);
+        //if err == -16 {
+            let mut balancing = self.balancing.as_ref().unwrap().write();
+            balancing.remove(&pid);
+        //}
     }
 
     fn select_task_rq(&self, pid: u64, waker_cpu: i32, prev_cpu: i32) -> i32 {
@@ -1026,20 +1028,20 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         //if cpu_state.get(&(sched.get_cpu() as u32)).is_none() {
         //    println!("migrate cpu is {}", sched.get_cpu());
         //}
-        let updated_vruntime = vruntime;
+        let updated_vruntime;
         {
             let mut cpu_state = all_cpu_state.get(&cpu).unwrap().write();
             let mut real_set = &mut cpu_state.set;
             let raw_vruntime = calculate_vruntime(runtime, prio);
-            //updated_vruntime = if vruntime > raw_vruntime {
-            //    if let Some((min_vruntime, _)) = real_set.first() {
-            //        core::cmp::max(raw_vruntime, *min_vruntime)
-            //    } else {
-            //        raw_vruntime
-            //    }
-            //} else {
-            //    vruntime
-            //};
+            updated_vruntime = if vruntime > raw_vruntime {
+                if let Some((min_vruntime, _)) = real_set.first() {
+                    core::cmp::max(raw_vruntime, *min_vruntime)
+                } else {
+                    raw_vruntime
+                }
+            } else {
+                vruntime
+            };
             real_set.insert((updated_vruntime, pid));
             //println!("added to set {:?}", real_set);
             //println!("migrate add pid {} cpu {} set is {:?}", pid, sched.get_cpu(), real_set);
@@ -1134,20 +1136,22 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
             //if !(set.is_empty() && idle) && !(state.capacity.count_ones() >=6) {
                 //println!("full cpu {} len {} idle {} ones {}", cpu, set.len(), idle, state.capacity.count_ones());
             //}
-            if state.capacity.count_ones() >= 5 {
-            //if (set.is_empty() && idle) || state.capacity.count_ones() >= 5 {
+            //if state.capacity.count_ones() >= 5 {
+            if (set.is_empty() && idle) || state.capacity.count_ones() >= 6 {
+                //let mut balancing_cpus = self.balancing_cpus.as_ref().unwrap().write();
+                //let mut balancing = self.balancing.as_ref().unwrap().write();
                 {
-                    let mut balancing_cpus = self.balancing_cpus.as_ref().unwrap().write();
+             //       let mut balancing_cpus = self.balancing_cpus.as_ref().unwrap().write();
                     //if balancing_cpus.contains_key(&(cpu as u32)) {
-                        //let num_runs = balancing_cpus.get_mut(&(cpu as u32)).unwrap();
-                        //if *num_runs >= 3 {
-                        //    balancing_cpus.remove(&(cpu as u32));
-                        //    return None;
-                        //} else {
-                        //    *num_runs += 1;
-                        //}
+                    //    let num_runs = balancing_cpus.get_mut(&(cpu as u32)).unwrap();
+                    //    if *num_runs >= 3 {
+                    //        balancing_cpus.remove(&(cpu as u32));
+                    //        return None;
+                    //    } else {
+                    //        *num_runs += 1;
+                    //    }
                     //} else {
-                        balancing_cpus.insert(cpu as u32, 1);
+                    //    //balancing_cpus.insert(cpu as u32, 1);
                     //}
                 }
             //if set.is_empty() && idle {
@@ -1164,27 +1168,31 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
                         continue;
                     }
                     {
-                        let balancing_cpus = self.balancing_cpus.as_ref().unwrap().read();
-                        if balancing_cpus.contains_key(&(i as u32)) {
-                            continue;
-                        }
+                        //let balancing_cpus = self.balancing_cpus.as_ref().unwrap().read();
+                        //if balancing_cpus.contains_key(&(i as u32)) {
+                        //    continue;
+                        //}
                     }
                     if let Some(lock2) = cpu_state.get(&(i as u32)) {
                         let state2 = lock2.read();
                         let idle2 = state2.curr.is_none();
                         let set2 = &state2.set;
-                //        if set2.len() > max_tasks && !(idle2 && set2.len() == 1) {
-                        if state2.load.count_ones() > max_load && !(idle2 && set2.len() == 1) && state2.capacity.count_ones() < 4 {
+                        if set2.len() > max_tasks && !(idle2 && set2.len() == 1) && state2.capacity.count_ones() < 4 {
+                //        if state2.load.count_ones() > max_load && !(idle2 && set2.len() == 1) && state2.capacity.count_ones() < 4 {
                         //if state2.load.count_ones() > max_load && !(set2.len() <= 1) && state2.capacity.count_ones() < 6 {
                             for (_, pid) in set2 {
-                                let mut balancing = self.balancing.as_ref().unwrap().read();
+                                let mut balancing = self.balancing.as_ref().unwrap().write();
+                                //let mut balancing = self.balancing.as_ref().unwrap().read();
                                 let mut locked = self.locked.as_ref().unwrap().read();
                                 if Some(*pid) != state2.curr && !balancing.contains(pid) && !locked.contains(pid) {
                                     max_cpu = Some(i);
                                     max_tasks = set2.len();
                                     max_load = state2.load.count_ones();
+                                    if let Some(old_pid) = balance_pid {
+                                        balancing.remove(&old_pid);
+                                    }
                                     balance_pid = Some(*pid);
-                        //            balancing.insert(*pid);
+                                    balancing.insert(*pid);
                          //           return balance_pid;
                                     //other_free = state2.free_time;
                                     break;
@@ -1243,20 +1251,20 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         //                }
                     }
                 }
-                if let Some(bpid) = balance_pid && let Some(other_cpu) = max_cpu {
-                    //println!("balacing {:?} from {:?} to {}", balance_pid, max_cpu, cpu);
-                    let mut balancing = self.balancing.as_ref().unwrap().write();
-                    if !balancing.insert(bpid) {
-                        // race, it's already in
-                        balance_pid = None;
-                    }
-                    //let mut balancing_cpus = self.balancing_cpus.as_ref().unwrap().write();
-                    //balancing_cpus.insert(other_cpu as u32);
-                }
-                if balance_pid.is_none() {
-                    let mut balancing_cpus = self.balancing_cpus.as_ref().unwrap().write();
-                    balancing_cpus.remove(&(cpu as u32));
-                }
+                //if let Some(bpid) = balance_pid && let Some(other_cpu) = max_cpu {
+                //    //println!("balacing {:?} from {:?} to {}", balance_pid, max_cpu, cpu);
+                //    //let mut balancing = self.balancing.as_ref().unwrap().write();
+                //    if !balancing.insert(bpid) {
+                //        // race, it's already in
+                //        balance_pid = None;
+                //    }
+                //    //let mut balancing_cpus = self.balancing_cpus.as_ref().unwrap().write();
+                //    //balancing_cpus.insert(other_cpu as u32);
+                //}
+                //if balance_pid.is_none() {
+                //    //let mut balancing_cpus = self.balancing_cpus.as_ref().unwrap().write();
+                //    balancing_cpus.remove(&(cpu as u32));
+                //}
                 return balance_pid;
                 //return None;
             }
@@ -1277,8 +1285,8 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         //    map.insert(*next, 1);
         //    return Some(*next);
         //}
-        let mut balancing_cpus = self.balancing_cpus.as_ref().unwrap().write();
-        balancing_cpus.remove(&(cpu as u32));
+        //let mut balancing_cpus = self.balancing_cpus.as_ref().unwrap().write();
+        //balancing_cpus.remove(&(cpu as u32));
         return None;
     }
 
