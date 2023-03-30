@@ -75,7 +75,7 @@ pub fn rust_main(record_file: *const i8) {
         //println!("record_file {}", *record_file);
         //println!("record_file {}", *record_file.offset(1));
         let mut cpu_state = BTreeMap::new();
-        for i in 0..6 {
+        for i in 0..8 {
             let state = CpuState {
                 weight: 0,
                 inv_weight: 0,

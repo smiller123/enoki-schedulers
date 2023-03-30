@@ -55,7 +55,8 @@ use memmap::MmapOptions;
 pub struct bento_ioc_create_queue {
     elems: u32,
     flags: u32,
-    mapsize: u64
+    mapsize: u64,
+    id: u32
 }
 
 #[repr(C)]
@@ -98,9 +99,11 @@ fn main() {
     //let agent_file = options.read(true).write(true).open("/sys/fs/ghost/enclave_10/ctl").unwrap();
     let agent_file = options.read(true).write(true).open("/sys/fs/ghost/ctl").unwrap();
     let mut create_queue = bento_ioc_create_queue {
-        elems: 32,
+        //elems: 4194304,
+        elems: 8388608,
         flags: 0,
-        mapsize: 0
+        mapsize: 0,
+        id: 0
     };
     let res = unsafe {
         bento_create_record(agent_file.as_raw_fd(), &mut create_queue as *mut bento_ioc_create_queue)
@@ -120,15 +123,30 @@ fn main() {
         &mut *(mmap.as_mut_ptr() as *mut Queue)
     };
     let second = time::Duration::from_millis(1000);
+    let mut buffer = String::from("");
+    let mut buff_size = 0;
     loop {
+        let head = q.head;
+        let tail = q.tail;
+        //if head != tail && (head - tail) >= 4194304 {
+        if head != tail && (head - tail) >= 8388608 {
+            println!("overlap head {} tail {}", head, tail);
+        }
         let msg_ret = q.dequeue();
         if let Some(msg) = msg_ret {
-            f.write(msg.as_bytes());
-            f.write("\n".as_bytes());
+            buffer = format!("{}{}\n", buffer, msg);
+            buff_size += 1;
+            //f.write(format!("{}\n", msg).as_bytes());
+            //f.write("\n".as_bytes());
         } else {
         //println!("got {:?}", msg);
         //if msg_ret.is_none() {
             thread::sleep(second);
+        }
+        if buff_size == 100 {
+            f.write(buffer.as_bytes());
+            buffer = String::from("");
+            buff_size = 0;
         }
     }
     //let replay_arg_str = format!("fsname={}", disk_name.to_str().unwrap());

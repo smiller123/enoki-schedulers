@@ -1,0 +1,21 @@
+[package]
+name = "bento-ghost2"
+version = "0.1.0"
+authors = ["Danyang Zhuo <danyangz@cs.washington.edu>",
+           "Kaiyuan Zhang <kaiyuanz@cs.washington.edu>",
+           "Samantha Miller <sm237@cs.washington.edu>"]
+
+[lib]
+crate-type = ["staticlib"]
+
+[features]
+default = []
+record = ["bento/record"]
+
+[dependencies]
+bento = {path = "../../../bento/bento/rust" }
+datablock = { path = "../../../bento/datablock-rs/datablock" }
+rlibc = "1.0"
+hash32 = "0.1.1"
+spin = { version = "0.9.4", features = ["rwlock"] }
+serde = {version = "1.0.*", default-features = false, features = ["derive"] }

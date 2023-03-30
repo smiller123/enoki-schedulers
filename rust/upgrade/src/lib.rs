@@ -69,52 +69,52 @@ pub fn rust_main(record_file: *const i8) {
         println!("Hello from Rust");
         println!("record_file {}", record_file as u64);
         unsafe {
-            let name = unsafe { CStr::from_raw(record_file as *const raw::c_char) };
-            let name_str = OsStr::new(str::from_utf8(name.to_bytes_with_nul()).unwrap());
-            println!("file {:?}", name_str.to_str());
-        //println!("record_file {}", *record_file);
-        //println!("record_file {}", *record_file.offset(1));
-        let mut cpu_state = BTreeMap::new();
-        for i in 0..8 {
-            let state = CpuState {
-                weight: 0,
-                inv_weight: 0,
-                curr: None,
-              //  leftmost: (u64::MAX, u64::MAX),
-                set: BTreeSet::new(),
-                free_time: 0,
-                load: 0,
-                capacity: 0xff,
-                should_report: 0,
-                //set: RBTree::new(),
-             //   fake_set: BTreeSet::new(),
-            };
-            cpu_state.insert(i, RwLock::new(state));
-        }
-        let state = CpuState {
-            weight: 0,
-            inv_weight: 0,
-            curr: None,
-            //leftmost: (u64::MAX, u64::MAX),
-            set: BTreeSet::new(),
-            free_time: 0,
-            load: 0,
-            capacity: 0xff,
-            should_report: 0,
-            //set: RBTree::new(),
-            //fake_set: BTreeSet::new(),
-        };
-        cpu_state.insert(u32::MAX, RwLock::new(state));
-//        BENTO_SCHED.sets_list = Some(RwLock::new(sets_list));
-        BENTO_SCHED.map = Some(RwLock::new(BTreeMap::new()));
-        BENTO_SCHED.state = Some(RwLock::new(BTreeMap::new()));
-        BENTO_SCHED.cpu_state = Some(RwLock::new(cpu_state));
-        BENTO_SCHED.user_q = Some(RwLock::new(BTreeMap::new()));
-        BENTO_SCHED.rev_q = Some(RwLock::new(BTreeMap::new()));
-        BENTO_SCHED.balancing = Some(RwLock::new(BTreeSet::new()));
-        BENTO_SCHED.balancing_cpus = Some(RwLock::new(BTreeMap::new()));
-        BENTO_SCHED.locked = Some(RwLock::new(BTreeSet::new()));
-        BENTO_SCHED.register();
+     //       let name = unsafe { CStr::from_raw(record_file as *const raw::c_char) };
+     //       let name_str = OsStr::new(str::from_utf8(name.to_bytes_with_nul()).unwrap());
+     //       println!("file {:?}", name_str.to_str());
+     //   //println!("record_file {}", *record_file);
+     //   //println!("record_file {}", *record_file.offset(1));
+     //   let mut cpu_state = BTreeMap::new();
+     //   for i in 0..8 {
+     //       let state = CpuState {
+     //           weight: 0,
+     //           inv_weight: 0,
+     //           curr: None,
+     //         //  leftmost: (u64::MAX, u64::MAX),
+     //           set: BTreeSet::new(),
+     //           free_time: 0,
+     //           load: 0,
+     //           capacity: 0xff,
+     //           should_report: 0,
+     //           //set: RBTree::new(),
+     //        //   fake_set: BTreeSet::new(),
+     //       };
+     //       cpu_state.insert(i, RwLock::new(state));
+     //   }
+     //   let state = CpuState {
+     //       weight: 0,
+     //       inv_weight: 0,
+     //       curr: None,
+     //       //leftmost: (u64::MAX, u64::MAX),
+     //       set: BTreeSet::new(),
+     //       free_time: 0,
+     //       load: 0,
+     //       capacity: 0xff,
+     //       should_report: 0,
+     //       //set: RBTree::new(),
+     //       //fake_set: BTreeSet::new(),
+     //   };
+     //   cpu_state.insert(u32::MAX, RwLock::new(state));
+//   //     BENTO_SCHED.sets_list = Some(RwLock::new(sets_list));
+     //   BENTO_SCHED.map = Some(RwLock::new(BTreeMap::new()));
+     //   BENTO_SCHED.state = Some(RwLock::new(BTreeMap::new()));
+     //   BENTO_SCHED.cpu_state = Some(RwLock::new(cpu_state));
+     //   BENTO_SCHED.user_q = Some(RwLock::new(BTreeMap::new()));
+     //   BENTO_SCHED.rev_q = Some(RwLock::new(BTreeMap::new()));
+     //   BENTO_SCHED.balancing = Some(RwLock::new(BTreeSet::new()));
+     //   BENTO_SCHED.balancing_cpus = Some(RwLock::new(BTreeMap::new()));
+     //   BENTO_SCHED.locked = Some(RwLock::new(BTreeSet::new()));
+        BENTO_SCHED.reregister();
         //let this_mod = BentoGhostModule {};
         //Ok(this_mod)
         }
