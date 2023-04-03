@@ -43,8 +43,6 @@ pub struct BentoSched {
     pub map: Option<RwLock<BTreeMap<u64, Schedulable>>>,
     pub user_q: Option<RwLock<Option<RingBuffer<UserMessage>>>>,
     pub rev_q: Option<RwLock<Option<RingBuffer<UserMessage>>>>,
-    pub pid_to_hint: Option<RwLock<BTreeMap<u64, u32>>>,
-    pub hint_to_core: Option<RwLock<BTreeMap<u32, i32>>> 
 }
 
 pub struct UpgradeData {
@@ -54,8 +52,7 @@ pub struct UpgradeData {
 
 #[derive(Serialize, Deserialize, Clone, Copy)]
 pub struct UserMessage {
-    tid: u32,
-    hint: u32
+    val: i32
 }
 
 impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> for BentoSched {
@@ -66,8 +63,7 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
     //fn init(&mut self) {
    // }
 
-    fn task_new(&self, pid: u64, _runtime: u64, runnable: u16, _prio: i32, sched: Schedulable) {
-        println!("tid in task_new: {}", pid);
+    fn task_new(&self, pid: u64, _runtime: u64, runnable: u16, sched: Schedulable) {
         if runnable > 0 {
             let mut q = self.q.as_ref().unwrap().write();
             q.push_back(pid);
@@ -113,35 +109,16 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
     }
 
     fn pick_next_task(&self, cpu: i32) -> Option<Schedulable> {
+        if self.rev_q.is_some()
+        {
+            let mut rev_q_guard = self.rev_q.as_ref().unwrap().write();
+            if rev_q_guard.is_some() {
+            let rev_q = rev_q_guard.as_mut().unwrap();
+            let msg = UserMessage { val: 10 };
+            rev_q.enqueue(msg);
+            }
+        }
         let mut q = self.q.as_ref().unwrap().write();
-        // let map = self.map.as_ref().unwrap().read();
-        
-        // let mut idx : usize = 0usize;
-        // while idx < q.len() {
-            // // cycle through the queue until we find first task belonging to this CPU
-            // if let Some(pid) = q.get(idx) {
-                // if map.get(&pid).is_some() {
-                    // // if this task's cpu matches current target cpu, use this task
-                    // if (map.get(&pid).unwrap().get_cpu() == cpu as u32 ||
-                        // map.get(&pid).unwrap().get_cpu() == u32::MAX) {
-                        // break;
-                    // }
-                // }
-            // }
-            // idx += 1;
-        // }
-
-        // if (idx >= q.len()) {
-            // return None;
-        // }
-
-        // if let Some(pid) = q.remove(idx) {
-            // hrtick::hrtick_start(cpu, 10000);
-            // return Some(*map.get(&pid).unwrap());
-        // }
-
-        // return None;
-
         if let Some(pid) = q.pop_front() {
             let map = self.map.as_ref().unwrap().read();
             if map.get(&pid).is_none() {
@@ -156,11 +133,9 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
                 //return None;
                 //Some(pid)
                 // None shouldn't happen anymore
-                // TODO: probably should turn this into a constant
-                // hrtick::hrtick_start(cpu, 10000);
                 Some(*map.get(&pid).unwrap())
             } else {
-                println!("can't schedule on other cpu\n");
+                //println!("can't schedule on other cpu\n");
                 q.push_front(pid);
                 None
             }
@@ -175,33 +150,16 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
     }
 
     fn select_task_rq(&self, pid: u64) -> i32 {
-        println!("tid in select_task_rq: {}", pid);
         let mut map = self.map.as_ref().unwrap().write();
         //*map.get(&pid).unwrap_or(&1) as i32
-        //
-        //
-        let pid_hint_map = self.pid_to_hint.as_ref().unwrap().read();
-        let hint_core_map = self.hint_to_core.as_ref().unwrap().read();
-
-        // prioritize matching hints before currently assigned core
-        match pid_hint_map.get(&pid) {
-            None => (match map.get(&pid) {
-                        None => 1,
-                        Some(sched) => sched.get_cpu() as i32
-                    }),
-            Some(hint) => (match hint_core_map.get(&hint) {
-                            None => 1, // something has gone really wrong...
-                            Some(core) => *core
-                        }),
+        match map.get(&pid) {
+            None => {
+                //map.insert(pid, pid as u32 % 2);
+                pid as i32 % 2
+            },
+            //None => 1,
+            Some(sched) => sched.get_cpu() as i32,
         }
-        // match map.get(&pid) {
-            //None => {
-            //    //map.insert(pid, pid as u32 % 2);
-            //    pid as i32 % 2
-            //},
-            // None => 1,
-            // Some(sched) => sched.get_cpu() as i32,
-        // }
     }
 
     fn selected_task_rq(&self, sched: Schedulable) {
@@ -218,33 +176,22 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
     }
 
     fn balance(&self, cpu: i32) -> Option<u64> {
-        // TODO: balance should probably be fine? May need to change
-        // pick_next_task so that scheduler does not give up selecting
-        // a new process 
-        //
-        // TODO: make sure 
         //if cpu != 1 {
-            //return None;
+        //    return None;
         //}
-        // GOOD BAlANCE CODE FOR SHINJUKU
-        // let q = self.q.as_ref().unwrap().read();
-        // let mut next = &0;
-        // if let Some(opt) = q.front() {
-            // next = opt;
-            // return Some(*next);
-        // } else {
-            // return None;
-        // }
-        // let mut map = self.map.as_ref().unwrap().write();
-        // if let Some(old_sched) = map.get(next) {
-            // let new_sched = Schedulable {
-            //    pid: *next,
-            //    cpu: cpu as u32
-            // };
-            // println!("shifting proc {} to cpu 1", *next);
-            // map.insert(*next, new_sched);
-            // return Some(*next);
-        // }
+        //let q = self.q.as_ref().unwrap().read();
+        //let mut next = &0;
+        //if let Some(opt) = q.front() {
+        //    next = opt;
+        //} else {
+        //    return None;
+        //}
+        //let mut map = self.map.as_ref().unwrap().write();
+        //if let Some(0) = map.get(next) {
+        //    println!("shifting proc {} to cpu 1", *next);
+        //    map.insert(*next, 1);
+        //    return Some(*next);
+        //}
         return None;
     }
 
@@ -268,15 +215,12 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
     fn register_queue(&self, q: RingBuffer<UserMessage>) {
         //println!("q ptr {:?}", q.inner);
         unsafe {
-        println!("start registering new queue");
         //println!("q ptr {:?}", (*q.inner).offset);
         //println!("q capacity {}", (*q.inner).capacity);
         //println!("q readptr {}", (*q.inner).readptr);
         //println!("q writeptr {}", (*q.inner).writeptr);
         let mut user_q = self.user_q.as_ref().unwrap().write();
-        println!("Obtained current user queue");
         user_q.replace(q);
-        println!("Replacing with passed-in queue");
 
         //self.user_q = Some(RwLock::new(q));
         }
@@ -297,7 +241,6 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
     }
 
     fn enter_queue(&self, entries: u32) {
-        println!("Entries to poll {}", entries);
         let mut user_q_guard = self.user_q.as_ref().unwrap().write();
         let user_q = user_q_guard.as_mut().unwrap();
         for i in 0..entries {
@@ -305,21 +248,8 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         //println!("user_q head {}", (*user_q.inner).writeptr);
         //println!("user_q tail {}", (*user_q.inner).readptr);
         //}
-            let msg = user_q.dequeue().unwrap();
-            println!("msg val {:?}", &msg.hint);
-
-            let mut hint_map = self.hint_to_core.as_ref().unwrap().write();
-            let mut pid_hint_map = self.pid_to_hint.as_ref().unwrap().write();
-
-            // TODO: change this to be slightly less load-intense on certain cores
-            // For now, we are assigning a new hint to the mod of the hint core
-            hint_map.entry(msg.hint).or_insert_with(|| {
-                (((msg.hint) % 6) + 1) as i32
-            });
-
-            // unconditionally insert pid and hint, may want to
-            // migrate process to hint's core
-            pid_hint_map.insert(msg.tid as u64, msg.hint); 
+            let msg = user_q.dequeue();
+        //println!("msg val {:?}", msg);
         }
     }
 
@@ -338,15 +268,6 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         // We must have a q or this won't be called
         q.unwrap()
     }
-
-    // fn task_tick(&self, cpu: i32, queued: bool) {
-        // if queued {
-            // //println!("ticking {}", cpu);
-            // unsafe {
-                // bento::bindings::resched_cpu_no_lock(cpu);
-            // }
-        // }
-    // }
 }
 
 //bento::kernel_module!(
