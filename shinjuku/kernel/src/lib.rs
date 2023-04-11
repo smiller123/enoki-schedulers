@@ -65,8 +65,8 @@ pub fn rust_main(record_file: *const i8) {
         //println!("record_file {}", *record_file.offset(1));
         BENTO_SCHED.q = Some(RwLock::new(VecDeque::new()));
         BENTO_SCHED.map = Some(RwLock::new(BTreeMap::new()));
-        BENTO_SCHED.user_q = Some(RwLock::new(None));
-        BENTO_SCHED.rev_q = Some(RwLock::new(None));
+        BENTO_SCHED.user_q = Some(RwLock::new(BTreeMap::new()));
+        BENTO_SCHED.rev_q = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.register();
         //let this_mod = BentoGhostModule {};
         //Ok(this_mod)
