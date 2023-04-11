@@ -215,7 +215,7 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
 
     fn task_new(&self, pid: u64, runtime: u64, runnable: u16, prio: i32, sched: Schedulable, _guard: RQLockGuard) {
         //if sched.get_pid() == 0 {
-        //println!("task new pid {} prio {} runtime {} cpu {}", pid, prio, runtime, sched.get_cpu());
+        println!("task new pid {} prio {} runtime {} cpu {}", pid, prio, runtime, sched.get_cpu());
        // }
         let mut vruntime = calculate_vruntime(runtime, prio);
         if runnable > 0 {
@@ -288,8 +288,35 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         }
     }
 
-    fn task_prio_changed(&self, pid: u64, _prio: i32, _guard: RQLockGuard) {
-        //println!("task prio changed {}", pid);
+    fn task_prio_changed(&self, pid: u64, prio: i32, _guard: RQLockGuard) {
+        println!("task prio changed {}", pid);
+        let old_prio;
+        {
+            let mut state = self.state.as_ref().unwrap().write();
+            let procstate = state.get_mut(&pid).unwrap();
+            old_prio = procstate.prio;
+            procstate.prio = prio;
+        }
+        let cpu;
+        {
+            let mut map = self.map.as_ref().unwrap().read();
+            cpu = map.get(&pid).unwrap().get_cpu();
+        }
+        {
+            let all_cpu_state = self.cpu_state.as_ref().unwrap().read();
+            let mut cpu_state = all_cpu_state.get(&cpu).unwrap().write();
+            self.remove_weight(&mut cpu_state, old_prio);
+            self.add_weight(&mut cpu_state, prio);
+        }
+        //self.remove_weight(&mut cpu_state, old_prio);
+        //self.remove_weight(&mut cpu_state, prio);
+        //let procstate = ProcessState {
+        //    prio: prio,
+        //    vruntime: vruntime,
+        //    last_runtime: runtime,
+        //    cpu: cpu,
+        //};
+        //state.insert(pid, procstate);
     }
 
     fn task_wakeup(&self, pid: u64, _agent_data: u64, deferrable: bool,
@@ -773,8 +800,8 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
                     let factor = weight_shift * inv_weight;
                     let slice_calc = period * factor;
                     let slice = slice_calc >> 32;
-                    //println!("w {} total w {}, w shift {}, tw shift {}, inv {}, factor {}, slice_calc {}, slice {}",
-                     //        weight, total_weight, weight_shift, total_weight_shift, inv_weight, factor, slice_calc, slice);
+                    //println!("w {} total w {}, w shift {}, inv {}, factor {}, slice_calc {}, slice {}",
+                     //        weight, total_weight, weight_shift, inv_weight, factor, slice_calc, slice);
                     //getnstimeofday64_rs(&mut step4);
                     //if cpu_state.should_report % 10000 == 0 {
                     //println!("waiting {} w {} total w {}, w shift {}, inv {}, factor {}, slice_calc {}, slice {}",

@@ -35,6 +35,7 @@ use sched::BentoSched;
 
 use alloc::collections::vec_deque::VecDeque;
 use alloc::collections::btree_map::BTreeMap;
+use alloc::collections::btree_set::BTreeSet;
 
 use core::mem;
 use core::str;
@@ -45,6 +46,7 @@ use ringbuffer::RingBuffer;
 pub static mut BENTO_SCHED: BentoSched = BentoSched {
     q: None,
     map: None,
+    moved: None,
     user_q: None,
     rev_q: None,
 };
@@ -65,6 +67,7 @@ pub fn rust_main(record_file: *const i8) {
         //println!("record_file {}", *record_file.offset(1));
         BENTO_SCHED.q = Some(RwLock::new(VecDeque::new()));
         BENTO_SCHED.map = Some(RwLock::new(BTreeMap::new()));
+        BENTO_SCHED.moved = Some(RwLock::new(BTreeSet::new()));
         BENTO_SCHED.user_q = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.rev_q = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.register();
