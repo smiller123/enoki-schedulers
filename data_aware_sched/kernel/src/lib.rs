@@ -44,6 +44,7 @@ use ringbuffer::RingBuffer;
 
 pub static mut BENTO_SCHED: BentoSched = BentoSched {
     q: None,
+    qs: None,
     map: None,
     user_q: None,
     rev_q: None,
@@ -65,6 +66,12 @@ pub fn rust_main(record_file: *const i8) {
             println!("file {:?}", name_str.to_str());
         //println!("record_file {}", *record_file);
         //println!("record_file {}", *record_file.offset(1));
+        let mut qs = BTreeMap::new();
+        for i in 0..80 {
+            qs.insert(i, RwLock::new(VecDeque::new()));
+        }
+        qs.insert(u32::MAX, RwLock::new(VecDeque::new()));
+        BENTO_SCHED.qs = Some(RwLock::new(qs));
         BENTO_SCHED.q = Some(RwLock::new(VecDeque::new()));
         BENTO_SCHED.map = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.user_q = Some(RwLock::new(BTreeMap::new()));
