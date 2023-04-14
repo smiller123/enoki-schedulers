@@ -7,6 +7,7 @@
 #![feature(rustc_private)]
 #![allow(improper_ctypes)]
 #![feature(const_btree_new)]
+#![feature(let_chains)]
 #![no_std]
 
 extern crate alloc;
@@ -47,6 +48,8 @@ pub static mut BENTO_SCHED: BentoSched = BentoSched {
     q: None,
     map: None,
     moved: None,
+    pid_state: None,
+    cpu_running: None,
     user_q: None,
     rev_q: None,
 };
@@ -68,6 +71,8 @@ pub fn rust_main(record_file: *const i8) {
         BENTO_SCHED.q = Some(RwLock::new(VecDeque::new()));
         BENTO_SCHED.map = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.moved = Some(RwLock::new(BTreeSet::new()));
+        BENTO_SCHED.pid_state = Some(RwLock::new(BTreeMap::new()));
+        BENTO_SCHED.cpu_running = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.user_q = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.rev_q = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.register();
