@@ -72,7 +72,8 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
             let mut map = self.map.as_ref().unwrap().write();
             let mut pid_state = self.pid_state.as_ref().unwrap().write();
             let cpu = sched.get_cpu();
-            if !q.contains(&pid) && sched.get_cpu() < u32::MAX {
+            //if !q.contains(&pid) && sched.get_cpu() < u32::MAX {
+            if !q.contains(&pid) {
                 q.push_back(pid);
             }
             map.insert(pid, sched);
@@ -102,7 +103,6 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         let mut q = self.q.as_ref().unwrap().write();
         let mut map = self.map.as_ref().unwrap().write();
         let mut pid_state = self.pid_state.as_ref().unwrap().write();
-        let mut moved = self.moved.as_ref().unwrap().read();
 
         if !q.contains(&pid) {
             q.push_back(pid);
@@ -129,15 +129,49 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         }
     }
 
+    fn task_yield(
+        &self, pid: u64, runtime: u64,
+        _cpu_seqnum: u64, cpu: i32, _from_switchto: i8, sched: Schedulable, _guard: RQLockGuard
+    ) {
+        //println!("yield pid {} cpu {}", pid, cpu);
+        let mut q = self.q.as_ref().unwrap().write();
+        let mut map = self.map.as_ref().unwrap().write();
+        let mut pid_state = self.pid_state.as_ref().unwrap().write();
+        if !q.contains(&pid) {
+            q.push_back(pid);
+        }
+        pid_state.insert(pid, sched.get_cpu());
+        map.insert(pid, sched);
+        //let cpu = sched.get_cpu();
+        //{
+        //    let mut map = self.map.as_ref().unwrap().write();
+        //    if map.get(&pid).is_none() {
+        //        map.insert(pid, sched);
+        //    }
+        //}
+        //let mut state = self.state.as_ref().unwrap().write();
+        //let proc_state = state.get_mut(&pid).unwrap();
+
+        //let all_cpu_state = self.cpu_state.as_ref().unwrap().read();
+        //let mut cpu_state = all_cpu_state.get(&cpu).unwrap().write();
+        //let mut real_set = &mut cpu_state.set;
+        //let remove_val = (old_vruntime, pid);
+        //real_set.remove(&remove_val);
+        //
+    }
+
     fn pick_next_task(&self, cpu: i32, curr_sched: Option<Schedulable>, 
                       curr_runtime: Option<u64>, _guard: RQLockGuard) -> Option<Schedulable> {
         let mut q = self.q.as_ref().unwrap().write();
         let mut map = self.map.as_ref().unwrap().write();
-        let mut moved = self.moved.as_ref().unwrap().read();
+        //if cpu != 3 {
+        //    return None;
+        //}
        
         //println!("In pick next task");
 
         let mut idx : usize = 0usize;
+        //if let Some(pid) = q.front() {
         while idx < q.len() {
             // cycle through the queue until we find first task belonging to this CPU
             if let Some(pid) = q.get(idx) {
@@ -153,6 +187,11 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
                         cpu_running.insert(cpu as u32, true);
                         return map.remove(&pid);
                     }
+                    //if (cpu == 0 &&
+                    //    map.get(&pid).unwrap().get_cpu() == u32::MAX) {
+                    //    let pid = q.remove(idx).unwrap();
+                    //    return map.remove(&pid);
+                    //}
                 }
             }
             idx += 1;
@@ -203,17 +242,19 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
     }
 
     fn pnt_err(&self, cpu: i32, pid: u64, err: i32, _sched: Option<Schedulable>, _guard: RQLockGuard) {
-        //println!("In pnt_err");
+        println!("In pnt_err {}", pid);
         //let mut map = self.map.as_ref().unwrap().write();
         //map.insert(sched.get_pid(), sched);
     }
 
     fn select_task_rq(&self, pid: u64, _waker_cpu: i32, _prev_cpu: i32) -> i32 {
-        //println!("In select_task_rq");
+        //println!("In select_task_rq {}", pid);
         let mut pid_state = self.pid_state.as_ref().unwrap().read();
         match pid_state.get(&pid) {
             None => {
-                (pid as i32 % 6)
+                //(pid as i32 % 6)
+                //(pid as i32 % 3) + 3
+                3
             },
             Some(cpu) => *cpu as i32,
         }
@@ -228,7 +269,7 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         //println!("select adding sched {:?} q {:?}, map {:?}", sched, q, map);
         // TODO: why the fuck do we need this???
         //if q.contains(&sched.get_pid()) {
-        map.insert(sched.get_pid(), sched);
+        //map.insert(sched.get_pid(), sched);
         //}
     }
 
@@ -236,7 +277,7 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
     fn migrate_task_rq(&self, pid: u64, sched: Schedulable, _guard: RQLockGuard) -> Schedulable {
         //println!("in migrate");
         //println!("hitting migrate_task_rq pid {} to cpu {}", pid, sched.get_cpu());
-        let mut q = self.q.as_ref().unwrap().write();
+        //let mut q = self.q.as_ref().unwrap().write();
         let mut map = self.map.as_ref().unwrap().write();
         let mut pid_state = self.pid_state.as_ref().unwrap().write();
 
@@ -253,6 +294,7 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
 
     fn balance(&self, cpu: i32, _guard: RQLockGuard) -> Option<u64> {
         //println!("In balance");
+        return None;
         let q = self.q.as_ref().unwrap().read();
         let map = self.map.as_ref().unwrap().read();
         let mut moved = self.moved.as_ref().unwrap().write();
@@ -413,15 +455,27 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
 
     fn task_departed(&self, pid: u64, _cpu_seqnum: u64, _cpu: i32, 
                      _from_switchto: i8, _was_current: i8, _guard: RQLockGuard) -> Schedulable {
-        println!("in task_departed");
+        //println!("in task_departed");
         let mut q = self.q.as_ref().unwrap().write();
         let mut map = self.map.as_ref().unwrap().write();
-        if q.contains(&pid) {
+        //if q.contains(&pid) {
         if let Some(idx) = q.iter().position(|&x| x == pid) {
             q.remove(idx);
         }
-        }
+        //}
         map.remove(&pid).unwrap()
+    }
+
+    fn task_dead(&self, pid: u64, _guard: RQLockGuard) {
+        //println!("in task_dead");
+        let mut q = self.q.as_ref().unwrap().write();
+        let mut map = self.map.as_ref().unwrap().write();
+        //if q.contains(&pid) {
+        if let Some(idx) = q.iter().position(|&x| x == pid) {
+            q.remove(idx);
+        }
+        //}
+        map.remove(&pid);
     }
 }
 
