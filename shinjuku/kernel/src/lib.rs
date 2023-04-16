@@ -45,8 +45,10 @@ use core::fmt::Debug;
 use ringbuffer::RingBuffer;
 
 pub static mut BENTO_SCHED: BentoSched = BentoSched {
+    qs: None,
     q: None,
     map: None,
+    map2: None,
     moved: None,
     pid_state: None,
     cpu_running: None,
@@ -68,8 +70,15 @@ pub fn rust_main(record_file: *const i8) {
             println!("file {:?}", name_str.to_str());
         //println!("record_file {}", *record_file);
         //println!("record_file {}", *record_file.offset(1));
+        let mut qs = BTreeMap::new();
+        for i in 0..6 {
+            qs.insert(i, RwLock::new(VecDeque::new()));
+        }
+        qs.insert(u32::MAX, RwLock::new(VecDeque::new()));
+        BENTO_SCHED.qs = Some(RwLock::new(qs));
         BENTO_SCHED.q = Some(RwLock::new(VecDeque::new()));
         BENTO_SCHED.map = Some(RwLock::new(BTreeMap::new()));
+        BENTO_SCHED.map2 = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.moved = Some(RwLock::new(BTreeSet::new()));
         BENTO_SCHED.pid_state = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.cpu_running = Some(RwLock::new(BTreeMap::new()));
