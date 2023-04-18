@@ -53,6 +53,7 @@ pub static mut BENTO_SCHED: BentoSched = BentoSched {
     map: None,
     map2: None,
     state: None,
+    state2: None,
     balancing: None,
     balancing_cpus: None,
     cpu_state: None,
@@ -110,6 +111,7 @@ pub fn rust_main(record_file: *const i8) {
         BENTO_SCHED.map = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.map2 = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.state = Some(RwLock::new(BTreeMap::new()));
+        BENTO_SCHED.state2 = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.cpu_state = Some(RwLock::new(cpu_state));
         BENTO_SCHED.user_q = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.rev_q = Some(RwLock::new(BTreeMap::new()));
