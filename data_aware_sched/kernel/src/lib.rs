@@ -46,6 +46,7 @@ pub static mut BENTO_SCHED: BentoSched = BentoSched {
     q: None,
     qs: None,
     map: None,
+    map2: None,
     user_q: None,
     rev_q: None,
     hint_to_core: None,
@@ -74,6 +75,7 @@ pub fn rust_main(record_file: *const i8) {
         BENTO_SCHED.qs = Some(RwLock::new(qs));
         BENTO_SCHED.q = Some(RwLock::new(VecDeque::new()));
         BENTO_SCHED.map = Some(RwLock::new(BTreeMap::new()));
+        BENTO_SCHED.map2 = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.user_q = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.rev_q = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.hint_to_core = Some(RwLock::new(BTreeMap::new()));
