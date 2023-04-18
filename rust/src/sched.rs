@@ -51,6 +51,7 @@ static REPORT: core::sync::atomic::AtomicI64 = core::sync::atomic::AtomicI64::ne
 pub struct BentoSched {
 //    pub sets_list: Option<RwLock<BTreeMap<u32, RwLock<BTreeSet<(u64,u64)>>>>>,
     pub map: Option<RwLock<BTreeMap<u64, Schedulable>>>,
+    pub map2: Option<RwLock<BTreeMap<u64, RwLock<Option<Schedulable>>>>>,
     pub state: Option<RwLock<BTreeMap<u64, ProcessState>>>,
     pub cpu_state: Option<RwLock<BTreeMap<u32, RwLock<CpuState>>>>,
     pub user_q: Option<RwLock<BTreeMap<i32, RingBuffer<UserMessage>>>>,
@@ -221,11 +222,12 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         if runnable > 0 {
             let cpu;
             {
-                let mut map = self.map.as_ref().unwrap().write();
+                let mut map = self.map2.as_ref().unwrap().write();
+                //let mut map = self.map.as_ref().unwrap().write();
                 if map.get(&pid).is_none() {
-                    map.insert(pid, sched);
+                    map.insert(pid, RwLock::new(Some(sched)));
                 }
-                cpu = map.get(&pid).unwrap().get_cpu();
+                cpu = map.get(&pid).unwrap().read().as_ref().unwrap().get_cpu();
             }
             //println!("cpu is {}", cpu);
             //let sets_list = self.sets_list.as_ref().unwrap().read();
@@ -285,6 +287,12 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
             //    total_weight += other_weight;
             //}
             //println!("added {} to tree", pid);
+        } else {
+            let mut map = self.map2.as_ref().unwrap().write();
+            //let mut map = self.map.as_ref().unwrap().write();
+            if map.get(&pid).is_none() {
+                map.insert(pid, RwLock::new(Some(sched)));
+            }
         }
     }
 
@@ -299,8 +307,9 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         }
         let cpu;
         {
-            let mut map = self.map.as_ref().unwrap().read();
-            cpu = map.get(&pid).unwrap().get_cpu();
+            let mut map = self.map2.as_ref().unwrap().read();
+            //cpu = map.get(&pid).unwrap().get_cpu();
+            cpu = map.get(&pid).unwrap().read().as_ref().unwrap().get_cpu();
         }
         {
             let all_cpu_state = self.cpu_state.as_ref().unwrap().read();
@@ -325,18 +334,20 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         //if sched.get_cpu() == 0 {
         //println!("wakeup {} {} cpu {}", pid, _wake_up_cpu, sched.get_cpu());
         //}
-        let mut new_sched = false;
+        //let mut new_sched = false;
         let cpu = sched.get_cpu();
         {
-            let mut map = self.map.as_ref().unwrap().write();
-            if let Some(old_sched) = map.get(&pid) {
-                if old_sched.get_cpu() != sched.get_cpu() {
-                    new_sched = true;
-                }
-            } else {
-                new_sched = true;
-            }
-            map.insert(pid, sched);
+            let mut map = self.map2.as_ref().unwrap().read();
+            //if let Some(old_sched) = map.get(&pid) {
+            //    if old_sched.get_cpu() != sched.get_cpu() {
+            //        new_sched = true;
+            //    }
+            //} else {
+            //    new_sched = true;
+            //}
+            let mut sched_val = map.get(&pid).unwrap().write();
+            sched_val.replace(sched);
+            //map.insert(pid, sched);
         }
         //let sets_list = self.sets_list.as_ref().unwrap().read();
         //let mut real_set = sets_list.get(&cpu).unwrap().write();
@@ -416,8 +427,10 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         let old_vruntime;
         let cpu = sched.get_cpu();
         {
-            let mut map = self.map.as_ref().unwrap().write();
-            map.insert(pid, sched);
+            let map = self.map2.as_ref().unwrap().read();
+            let mut sched_val = map.get(&pid).unwrap().write();
+            sched_val.replace(sched);
+            //map.insert(pid, sched);
         }
         let all_cpu_state = self.cpu_state.as_ref().unwrap().read();
         let mut cpu_state = all_cpu_state.get(&cpu).unwrap().write();
@@ -554,8 +567,9 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
 
         let cpu;
         {
-            let mut map = self.map.as_ref().unwrap().write();
-            cpu = map.get(&pid).unwrap().get_cpu();
+            let mut map = self.map2.as_ref().unwrap().write();
+            cpu = map.get(&pid).unwrap().read().as_ref().unwrap().get_cpu();
+            //cpu = map.get(&pid).unwrap().read().unwrap().get_cpu();
             map.remove(&pid);
         }
         {
@@ -599,9 +613,10 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
 
         let cpu;
         let old_sched = {
-            let mut map = self.map.as_ref().unwrap().write();
-            cpu = map.get(&pid).unwrap().get_cpu();
-            map.remove(&pid).unwrap()
+            let mut map = self.map2.as_ref().unwrap().write();
+            //cpu = map.get(&pid).unwrap().get_cpu();
+            cpu = map.get(&pid).unwrap().read().as_ref().unwrap().get_cpu();
+            map.remove(&pid).unwrap().write().take().unwrap()
         };
         {
             let all_cpu_state = self.cpu_state.as_ref().unwrap().read();
@@ -656,8 +671,10 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         //self.update_curr(cpu);
         let curr_pid_opt = if let Some(current) = curr_sched {
             let pid = current.get_pid();
-            let mut map = self.map.as_ref().unwrap().write();
-            map.insert(current.get_pid(), current);
+            let mut map = self.map2.as_ref().unwrap().read();
+            let mut sched_val = map.get(&current.get_pid()).unwrap().write();
+            sched_val.replace(current);
+            //map.insert(current.get_pid(), current);
             Some(pid)
         } else {
             None
@@ -727,10 +744,13 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
             //getnstimeofday64_rs(&mut step11);
             let sched_opt = {
                 //let map = self.map.as_ref().unwrap().read();
-                let mut map = self.map.as_ref().unwrap().write();
+                let map = self.map2.as_ref().unwrap().read();
                 //map.get(&pid).and_then(|x| Some(*x))
                 //map.get(&pid)
-                map.remove(&pid)
+                //map.remove(&pid)
+                let sched_val = map.get(&pid).unwrap().write().take();
+                sched_val
+                //map.get(&pid).unwrap().write().take()
             };
             //getnstimeofday64_rs(&mut step12);
             if sched_opt.is_none() {
@@ -924,8 +944,10 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         if err == 2 {
             let sched = _sched.unwrap();
            // println!("pnt err insert {} {}", sched.get_pid(), sched.get_cpu());
-            let mut map = self.map.as_ref().unwrap().write();
-            map.insert(sched.get_pid(), sched);
+            let map = self.map2.as_ref().unwrap().read();
+            let mut sched_val = map.get(&sched.get_pid()).unwrap().write();
+            sched_val.replace(sched);
+            //map.insert(sched.get_pid(), sched);
             //let cpu_state = self.cpu_state.as_ref().unwrap().read();
             //if cpu_state.get(&(sched.get_cpu() as u32)).is_none() {
             //    println!("pnt err cpu is {}", sched.get_cpu());
@@ -1016,8 +1038,8 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
             None => {
                 //map.insert(pid, pid as u32 % 2);
                 //println!("would pick {}, waker {}, prev {}", pid % 6, waker_cpu, prev_cpu);
-                pid as i32 % 8
-                //6
+                pid as i32 % 6
+                //0
                 //prev_cpu
             },
             //None => 5,
@@ -1050,10 +1072,12 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         let cpu = sched.get_cpu();
         let old_sched;
         {
-            let mut map = self.map.as_ref().unwrap().write();
-            old_sched = map.remove(&pid).unwrap();
+            let mut map = self.map2.as_ref().unwrap().read();
+            let mut sched_val = map.get(&pid).unwrap().write();
+            old_sched = sched_val.replace(sched).unwrap();
+            //old_sched = map.remove(&pid).unwrap();
             old_cpu = old_sched.get_cpu();
-            map.insert(pid, sched);
+            //map.insert(pid, sched);
         }
         let vruntime;
         let prio;
@@ -1228,7 +1252,7 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
                 let mut max_load = state.load.count_ones();
                 let mut balance_pid = None;
                 //let mut other_free = 0;
-                for i in 0..8 {
+                for i in 0..6 {
                     if i == cpu {
                         continue;
                     }
@@ -1387,10 +1411,12 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         //}
         let cpu = sched.get_cpu();
         {
-            let mut map = self.map.as_ref().unwrap().write();
-            if map.get(&pid).is_none() {
-                map.insert(pid, sched);
-            }
+            let mut map = self.map2.as_ref().unwrap().write();
+            //if map.get(&pid).is_none() {
+            let mut sched_val = map.get(&pid).unwrap().write();
+            sched_val.replace(sched);
+                //map.insert(pid, sched);
+            //}
         }
         let mut state = self.state.as_ref().unwrap().write();
         let proc_state = state.get_mut(&pid).unwrap();

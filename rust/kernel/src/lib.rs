@@ -51,6 +51,7 @@ use ringbuffer::RingBuffer;
 pub static mut BENTO_SCHED: BentoSched = BentoSched {
 //    sets_list: None,
     map: None,
+    map2: None,
     state: None,
     balancing: None,
     balancing_cpus: None,
@@ -107,6 +108,7 @@ pub fn rust_main(record_file: *const i8) {
         cpu_state.insert(u32::MAX, RwLock::new(state));
 //        BENTO_SCHED.sets_list = Some(RwLock::new(sets_list));
         BENTO_SCHED.map = Some(RwLock::new(BTreeMap::new()));
+        BENTO_SCHED.map2 = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.state = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.cpu_state = Some(RwLock::new(cpu_state));
         BENTO_SCHED.user_q = Some(RwLock::new(BTreeMap::new()));
