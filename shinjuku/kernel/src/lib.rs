@@ -54,6 +54,7 @@ pub static mut BENTO_SCHED: BentoSched = BentoSched {
     cpu_running: None,
     user_q: None,
     rev_q: None,
+    timing: None,
 };
 
 #[no_mangle]
@@ -71,7 +72,7 @@ pub fn rust_main(record_file: *const i8) {
         //println!("record_file {}", *record_file);
         //println!("record_file {}", *record_file.offset(1));
         let mut qs = BTreeMap::new();
-        for i in 0..6 {
+        for i in 0..8 {
             qs.insert(i, RwLock::new(VecDeque::new()));
         }
         qs.insert(u32::MAX, RwLock::new(VecDeque::new()));
@@ -81,9 +82,10 @@ pub fn rust_main(record_file: *const i8) {
         BENTO_SCHED.map2 = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.moved = Some(RwLock::new(BTreeSet::new()));
         BENTO_SCHED.pid_state = Some(RwLock::new(BTreeMap::new()));
-        BENTO_SCHED.cpu_running = Some(RwLock::new(BTreeMap::new()));
+        BENTO_SCHED.cpu_running = Some(RwLock::new(BTreeSet::new()));
         BENTO_SCHED.user_q = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.rev_q = Some(RwLock::new(BTreeMap::new()));
+        BENTO_SCHED.timing = Some(RwLock::new(BTreeMap::new()));
         BENTO_SCHED.register();
         //let this_mod = BentoGhostModule {};
         //Ok(this_mod)
