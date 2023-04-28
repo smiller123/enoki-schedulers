@@ -8,6 +8,7 @@
 #![allow(improper_ctypes)]
 #![feature(const_btree_new)]
 #![feature(map_first_last)]
+#![feature(let_chains)]
 #![no_std]
 
 extern crate alloc;
@@ -59,6 +60,9 @@ pub static mut BENTO_SCHED: BentoSched = BentoSched {
     need_timer: None,
     must_balance: None,
     evicting: None,
+    assigned: None,
+    cpu_running: None,
+    clearing: None,
 };
 
 #[no_mangle]
@@ -94,6 +98,9 @@ pub fn rust_main(record_file: *const i8) {
         BENTO_SCHED.need_timer = Some(RwLock::new(BTreeSet::new()));
         BENTO_SCHED.must_balance = Some(RwLock::new(BTreeSet::new()));
         BENTO_SCHED.evicting = Some(RwLock::new(BTreeMap::new()));
+        BENTO_SCHED.assigned = Some(RwLock::new(BTreeMap::new()));
+        BENTO_SCHED.cpu_running = Some(RwLock::new(BTreeSet::new()));
+        BENTO_SCHED.clearing = Some(RwLock::new(false));
         BENTO_SCHED.register();
         //let this_mod = BentoGhostModule {};
         //Ok(this_mod)
