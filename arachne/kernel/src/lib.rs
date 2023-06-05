@@ -80,7 +80,7 @@ pub fn rust_main(record_file: *const i8) {
         //println!("record_file {}", *record_file);
         //println!("record_file {}", *record_file.offset(1));
         let mut qs = BTreeMap::new();
-        for i in 0..80 {
+        for i in 0..8 {
             qs.insert(i, RwLock::new(VecDeque::new()));
         }
         qs.insert(u32::MAX, RwLock::new(VecDeque::new()));

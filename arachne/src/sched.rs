@@ -130,7 +130,7 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, RevMessage> f
     fn task_wakeup(&self, pid: u64, _agent_data: u64, deferrable: bool,
                    _last_run_cpu: i32, _wake_up_cpu: i32, _waker_cpu: i32,
                    sched: Schedulable, _guard: RQLockGuard) {
-        //println!("wakeup {}", pid);
+        println!("wakeup {}", pid);
         let qs = self.qs.as_ref().unwrap().read();
         let mut q = qs.get(&sched.get_cpu()).unwrap().write();
         //let mut q = self.q.as_ref().unwrap().write();
@@ -161,7 +161,7 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, RevMessage> f
 
     fn task_blocked(&self, pid: u64, _runtime: u64, _cpu_seqnum: u64,
                     cpu: i32, _from_switchto: i8, _guard: RQLockGuard) {
-        //println!("blocked {}", pid);
+        println!("blocked {}", pid);
         let qs = self.qs.as_ref().unwrap().read();
         let mut q = qs.get(&(cpu as u32)).unwrap().write();
         //let mut q = self.q.as_ref().unwrap().write();
@@ -273,7 +273,7 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, RevMessage> f
                     let mut cpu_running = self.cpu_running.as_ref().unwrap().write();
                     cpu_running.insert(cpu);
                     //return None;
-                    hrtick::hrtick_start(cpu, 1000000000);
+                    //hrtick::hrtick_start(cpu, 1000000000);
                     //hrtick::hrtick_start(cpu, 10000000);
                     return sched;
                 }
@@ -299,7 +299,7 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, RevMessage> f
                 //return None;
                 let mut cpu_running = self.cpu_running.as_ref().unwrap().write();
                 cpu_running.insert(cpu);
-                hrtick::hrtick_start(cpu, 1000000000);
+                //hrtick::hrtick_start(cpu, 1000000000);
                 //hrtick::hrtick_start(cpu, 10000000);
                 return sched;
             }
@@ -343,7 +343,7 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, RevMessage> f
                 //return None;
                 let mut cpu_running = self.cpu_running.as_ref().unwrap().write();
                 cpu_running.insert(cpu);
-                hrtick::hrtick_start(cpu, 1000000000);
+                //hrtick::hrtick_start(cpu, 1000000000);
                 //hrtick::hrtick_start(cpu, 10000000);
                 return sched;
             }
@@ -435,7 +435,7 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, RevMessage> f
         let pid_state = self.pid_state.as_ref().unwrap().read();
         //let cpu = sched.get_cpu();
         let retval = match pid_state.get(&pid) {
-            None => pid as i32 % 6,
+            None => pid as i32 % 8,
             Some(state) => state.cpu as i32,
         };
         //println!("selecting {} for pid {}", retval, pid);
@@ -655,20 +655,20 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, RevMessage> f
             // Decide how many cores each tgid should get
             let mut tgid_num_cores = BTreeMap::new();
             let mut total_assigned_cores = 0;
-            for j in 0..6 {
+            for j in 0..8 {
                 for (&tgid, &msg) in core_requests.iter() {
                     if !tgid_num_cores.contains_key(&tgid) {
                         tgid_num_cores.insert(tgid, 0);
                     }
                     let core_arr = [msg.prio0, msg.prio1, msg.prio2, msg.prio3, msg.prio4, msg.prio5, msg.prio6, msg.prio7];
-                    let to_add = core::cmp::min(*core_arr.get(j).unwrap(), 6 - total_assigned_cores);
+                    let to_add = core::cmp::min(*core_arr.get(j).unwrap(), 8 - total_assigned_cores);
                     *tgid_num_cores.get_mut(&tgid).unwrap() += to_add;
                     total_assigned_cores += to_add;
-                    if total_assigned_cores >= 6 {
+                    if total_assigned_cores >= 8 {
                         break;
                     }
                 }
-                if total_assigned_cores >= 6 {
+                if total_assigned_cores >= 8 {
                     break;
                 }
             }
@@ -747,7 +747,7 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, RevMessage> f
                 }
                 let need_increase = *num_cores - curr_assigned as u32;
                 for j in 0..need_increase {
-                    for k in 1..6 {
+                    for k in 1..8 {
                         if (core_map.get(&k).is_none() || core_map.get(&k).unwrap() == &0) {
                             core_map.insert(k, tgid);
                             break;
@@ -756,7 +756,7 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, RevMessage> f
                 }
             }
             
-            for j in 1..6 {
+            for j in 1..8 {
                 if !core_map.contains_key(&j) {
                     core_map.insert(j, 0);
                 }

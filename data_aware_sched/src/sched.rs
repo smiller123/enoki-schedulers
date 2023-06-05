@@ -69,7 +69,7 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
     //fn init(&mut self) {
    // }
 
-    fn task_new(&self, pid: u64, _runtime: u64, runnable: u16, _prio: i32, 
+    fn task_new(&self, pid: u64, _tgid: u64, _runtime: u64, runnable: u16, _prio: i32, 
                 sched: Schedulable, _guard: RQLockGuard) {
         //println!("tid in task_new: {}", pid);
         if runnable > 0 {
@@ -234,6 +234,7 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         //
         let pid_hint_map = self.pid_to_hint.as_ref().unwrap().read();
         let hint_core_map = self.hint_to_core.as_ref().unwrap().read();
+        return pid as i32 % 6;
 
         // prioritize matching hints before currently assigned core
         let reval = match pid_hint_map.get(&pid) {
@@ -348,7 +349,7 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         }
     }
 
-    fn register_queue(&self, q: RingBuffer<UserMessage>) -> i32 {
+    fn register_queue(&self, _pid: u64, q: RingBuffer<UserMessage>) -> i32 {
         //println!("q ptr {:?}", q.inner);
         unsafe {
         println!("start registering new queue");
@@ -367,7 +368,7 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         }
     }
 
-    fn register_reverse_queue(&self, q: RingBuffer<UserMessage>) -> i32 {
+    fn register_reverse_queue(&self, _pid: u64, q: RingBuffer<UserMessage>) -> i32 {
         //println!("q ptr {:?}", q.inner);
         unsafe {
         //println!("q ptr {:?}", (*q.inner).offset);

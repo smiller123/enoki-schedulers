@@ -577,7 +577,8 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         let old_vruntime;
         {
             let mut state = self.state2.as_ref().unwrap().write();
-            let proc_val = state.remove(&pid).unwrap();
+            //let proc_val = state.remove(&pid).unwrap();
+            let proc_val = state.get_mut(&pid).unwrap();
             let mut procstate_opt = proc_val.write();
             let mut procstate = procstate_opt.as_mut().unwrap();
             //let procstate = state.get_mut(&pid).unwrap();
@@ -626,7 +627,8 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         let old_vruntime;
         {
             let mut state = self.state2.as_ref().unwrap().write();
-            let proc_val = state.remove(&pid).unwrap();
+            //let proc_val = state.remove(&pid).unwrap();
+            let proc_val = state.get_mut(&pid).unwrap();
             let mut procstate_opt = proc_val.write();
             let mut procstate = procstate_opt.as_mut().unwrap();
             //let procstate = state.get_mut(&pid).unwrap();

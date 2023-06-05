@@ -33,7 +33,7 @@ use scheduler_utils::BentoScheduler;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
-use scheduler_utils::spin_rs::RwLock;
+use scheduler_utils::spin_rs::{register_lines, RwLock};
 
 use alloc::collections::vec_deque::VecDeque;
 use alloc::collections::btree_map::BTreeMap;
@@ -336,15 +336,18 @@ fn thread_func(bento: &BentoSched, mut replay_name2: Option<String>, msg_rx: mps
                  //                       last_ran_cpu, wake_up_cpu, waker_cpu, sched);
             },
             Some("new:") => {
+                println!("split {:?}", split);
                 let kpid_str = split.next().unwrap();
                 //let kpid: u32 = kpid_str.parse().unwrap();
 
                 let pid_str = split.nth(3).unwrap();
+                //println!("{}", pid_str);
                 let pid: u64 = pid_str[0..pid_str.len()-1].parse().unwrap();
-                let runtime_str = split.nth(1).unwrap();
+                let runtime_str = split.nth(3).unwrap();
                 //println!("{}", runtime_str);
                 let runtime: u64 = runtime_str[0..runtime_str.len()-1].parse().unwrap();
                 let runnable_str = split.nth(1).unwrap();
+                //println!("{}", runnable_str);
                 let runnable: u16 = runnable_str[0..runnable_str.len()-1].parse().unwrap();
                 let prio_str = split.nth(1).unwrap();
                 let prio: i32 = prio_str[0..prio_str.len()-1].parse().unwrap();
@@ -944,6 +947,14 @@ fn main() {
     println!("found threads {:?}", found_threads);
     let lines = read_lines(replay_name).unwrap();
 
+    let mut all_lock_lines = VecDeque::new();
+    for found in found_locks {
+        let this_lock_lines = lock_lines.remove(&found).unwrap();
+        all_lock_lines.push_back(this_lock_lines);
+    }
+    register_lines(all_lock_lines);
+
+
 
     let mut cpu_state = BTreeMap::new();
     for i in 0..8 {
@@ -957,10 +968,11 @@ fn main() {
             capacity: 0xff,
             should_report: 0
         };
-        let next_lock = found_locks.pop_front().unwrap();
-        let this_lock_lines = lock_lines.remove(&next_lock).unwrap();
+        //let next_lock = found_locks.pop_front().unwrap();
+        //let this_lock_lines = lock_lines.remove(&next_lock).unwrap();
         //cpu_state.insert(i, RwLock::new(state, lock_lines.pop_front().unwrap()));
-        cpu_state.insert(i, RwLock::new(state, this_lock_lines));
+        //cpu_state.insert(i, RwLock::new(state, this_lock_lines));
+        cpu_state.insert(i, RwLock::new(state));
     }
     let state = CpuState {
         weight: 0,
@@ -972,37 +984,48 @@ fn main() {
         capacity: 0xff,
         should_report: 0
     };
-    let next_lock = found_locks.pop_front().unwrap();
-    let this_lock_lines = lock_lines.remove(&next_lock).unwrap();
+    //let next_lock = found_locks.pop_front().unwrap();
+    //let this_lock_lines = lock_lines.remove(&next_lock).unwrap();
     //cpu_state.insert(u32::MAX, RwLock::new(state, lock_lines.pop_front().unwrap()));
-    cpu_state.insert(u32::MAX, RwLock::new(state, this_lock_lines));
+    //cpu_state.insert(u32::MAX, RwLock::new(state, this_lock_lines));
+    cpu_state.insert(u32::MAX, RwLock::new(state));
 
-    let map_lock = found_locks.pop_front().unwrap();
-    let map_lines = lock_lines.remove(&map_lock).unwrap();
-    let state_lock = found_locks.pop_front().unwrap();
-    let state_lines = lock_lines.remove(&state_lock).unwrap();
-    let cpu_state_lock = found_locks.pop_front().unwrap();
-    let cpu_state_lines = lock_lines.remove(&cpu_state_lock).unwrap();
-    let user_q_lock = found_locks.pop_front().unwrap();
-    let user_q_lines = lock_lines.remove(&user_q_lock).unwrap();
-    let rev_q_lock = found_locks.pop_front().unwrap();
-    let rev_q_lines = lock_lines.remove(&rev_q_lock).unwrap();
-    let bal_lock = found_locks.pop_front().unwrap();
-    let bal_lines = lock_lines.remove(&bal_lock).unwrap();
-    let bal_cpu_lock = found_locks.pop_front().unwrap();
-    let bal_cpu_lines = lock_lines.remove(&bal_cpu_lock).unwrap();
-    let locked_lock = found_locks.pop_front().unwrap();
-    let locked_lines = lock_lines.remove(&locked_lock).unwrap();
+    //let map_lock = found_locks.pop_front().unwrap();
+    //let map_lines = lock_lines.remove(&map_lock).unwrap();
+    //let state_lock = found_locks.pop_front().unwrap();
+    //let state_lines = lock_lines.remove(&state_lock).unwrap();
+    //let cpu_state_lock = found_locks.pop_front().unwrap();
+    //let cpu_state_lines = lock_lines.remove(&cpu_state_lock).unwrap();
+    //let user_q_lock = found_locks.pop_front().unwrap();
+    //let user_q_lines = lock_lines.remove(&user_q_lock).unwrap();
+    //let rev_q_lock = found_locks.pop_front().unwrap();
+    //let rev_q_lines = lock_lines.remove(&rev_q_lock).unwrap();
+    //let bal_lock = found_locks.pop_front().unwrap();
+    //let bal_lines = lock_lines.remove(&bal_lock).unwrap();
+    //let bal_cpu_lock = found_locks.pop_front().unwrap();
+    //let bal_cpu_lines = lock_lines.remove(&bal_cpu_lock).unwrap();
+    //let locked_lock = found_locks.pop_front().unwrap();
+    //let locked_lines = lock_lines.remove(&locked_lock).unwrap();
     let bento_sched = Arc::new(BentoSched {
         //q: Some(RwLock::new(VecDeque::new(), lock_lines.pop_front().unwrap())),
-        map: Some(RwLock::new(BTreeMap::new(), map_lines)),
-        state: Some(RwLock::new(BTreeMap::new(), state_lines)),
-        cpu_state: Some(RwLock::new(cpu_state, cpu_state_lines)),
-        user_q: Some(RwLock::new(BTreeMap::new(), user_q_lines)),
-        rev_q: Some(RwLock::new(BTreeMap::new(), rev_q_lines)),
-        balancing: Some(RwLock::new(BTreeSet::new(), bal_lines)),
-        balancing_cpus: Some(RwLock::new(BTreeMap::new(), bal_cpu_lines)),
-        locked: Some(RwLock::new(BTreeSet::new(), locked_lines)),
+        //map: Some(RwLock::new(BTreeMap::new(), map_lines)),
+        //state: Some(RwLock::new(BTreeMap::new(), state_lines)),
+        //cpu_state: Some(RwLock::new(cpu_state, cpu_state_lines)),
+        //user_q: Some(RwLock::new(BTreeMap::new(), user_q_lines)),
+        //rev_q: Some(RwLock::new(BTreeMap::new(), rev_q_lines)),
+        //balancing: Some(RwLock::new(BTreeSet::new(), bal_lines)),
+        //balancing_cpus: Some(RwLock::new(BTreeMap::new(), bal_cpu_lines)),
+        //locked: Some(RwLock::new(BTreeSet::new(), locked_lines)),
+        map: Some(RwLock::new(BTreeMap::new())),
+        map2: Some(RwLock::new(BTreeMap::new())),
+        state: Some(RwLock::new(BTreeMap::new())),
+        state2: Some(RwLock::new(BTreeMap::new())),
+        cpu_state: Some(RwLock::new(cpu_state)),
+        user_q: Some(RwLock::new(BTreeMap::new())),
+        rev_q: Some(RwLock::new(BTreeMap::new())),
+        balancing: Some(RwLock::new(BTreeSet::new())),
+        balancing_cpus: Some(RwLock::new(BTreeMap::new())),
+        locked: Some(RwLock::new(BTreeSet::new())),
     });
     let preprocess = now.elapsed();
     //let bento_sched = Arc::new(BentoSched {

@@ -43,6 +43,8 @@
 
 #define USEC_PER_SEC (1000000)
 
+#define gettid() ((pid_t)syscall(SYS_gettid))
+
 /* -m number of message threads */
 static int message_threads = 1;
 /* -t  number of workers per message thread */
