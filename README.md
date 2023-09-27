@@ -14,7 +14,7 @@ This code was tested using a specific version of nightly and may not work with n
 ### Compiling a scheduler
 We only discuss how to build and install the weighted fair queuing scheduler, but the other schedulers follow a similar pattern.
 
-Run `rustup component add rust-src`.
+Run `rustup component add rust-src --toolchain nightly-2022-08-21-x86_64-unknown-linux-gnu`.
 
 In the `wfq` directory, run `make`. The first time, this will take a few minutes.
 
@@ -39,3 +39,14 @@ Run `make` in the `perf_test` directory.
 Run `sudo ./enoki_test` to run the perf latency test on the loaded Enoki scheduler.
 
 To run the test on CFS, use `sudo ./cfs_test`.
+
+### Running the phoronix benchmarks
+With the scheduler loaded, move to the `phoronix_test` directory.
+
+Run `make` in the `phoronix_test` directory.
+
+Run `./enoki_test` to run the phoronix tests on the loaded Enoki scheduler.
+
+To run the test on CFS, use `./cfs_test`.
+
+To compare the results, run `../phoronix-test-suite/phoronix-test-suite compare-results-to-baseline cfseval enokieval`
