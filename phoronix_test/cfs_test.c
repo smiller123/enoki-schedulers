@@ -12,7 +12,7 @@
 main ()
 {
     char command[400];
-    strcpy(command, "FORCE_TIMES_TO_RUN=3 OUTPUT_FILE=cfs_tests_output TEST_RESULTS_NAME=cfs_eval TEST_RESULTS_IDENTIFIER=cfs_eval TEST_RESULTS_DESCRIPTION=cfs_eval ../phoronix-test-suite/phoronix-test-suite benchmark enoki-tests");
+    strcpy(command, "FORCE_TIMES_TO_RUN=3 OUTPUT_FILE=cfs_tests_output TEST_RESULTS_NAME=cfs_eval TEST_RESULTS_IDENTIFIER=cfs_eval TEST_RESULTS_DESCRIPTION=cfs_eval ../phoronix-test-suite/phoronix-test-suite benchmark smiller/enoki-tests");
 
     system(command);
 }
