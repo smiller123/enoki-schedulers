@@ -29,9 +29,6 @@ extern void rust_exit(void);
 
 static int xv6fs_init(void)
 {
-	printk(KERN_INFO "record file %d\n", (uint64_t) record_file);
-	printk(KERN_INFO "record file %p\n", record_file);
-	printk(KERN_INFO "record file %s\n", record_file);
     rust_main(record_file);
     return 0;
 }

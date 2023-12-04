@@ -4,10 +4,14 @@ use bento::println;
 use bento::scheduler_utils;
 #[cfg(not(feature = "replay"))]
 use bento::spin_rs::RwLock;
+#[cfg(not(feature = "replay"))]
+use bento::kernel::cpu::*;
 #[cfg(feature = "replay")]
 use scheduler_utils;
 #[cfg(feature = "replay")]
 use scheduler_utils::spin_rs::RwLock;
+#[cfg(feature = "replay")]
+use scheduler_utils::cpu::*;
 //use rbtree::RBTree;
 
 use serde::{Serialize, Deserialize};
@@ -1070,7 +1074,7 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
             None => {
                 //map.insert(pid, pid as u32 % 2);
                 //println!("would pick {}, waker {}, prev {}", pid % 6, waker_cpu, prev_cpu);
-                pid as i32 % 6
+                pid as i32 % num_online_cpus()
                 //0
                 //prev_cpu
             },
@@ -1264,7 +1268,7 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
                 //println!("full cpu {} len {} idle {} ones {}", cpu, set.len(), idle, state.capacity.count_ones());
             //}
             //if state.capacity.count_ones() >= 5 {
-            if (set.is_empty() && idle) || state.capacity.count_ones() >= 6 {
+            if (set.is_empty() && idle) || state.capacity.count_ones() >= num_online_cpus() as u32 {
                 //let mut balancing_cpus = self.balancing_cpus.as_ref().unwrap().write();
                 //let mut balancing = self.balancing.as_ref().unwrap().write();
                 {
@@ -1290,7 +1294,7 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
                 let mut max_load = state.load.count_ones();
                 let mut balance_pid = None;
                 //let mut other_free = 0;
-                for i in 0..6 {
+                for i in 0..num_online_cpus() {
                     if i == cpu {
                         continue;
                     }

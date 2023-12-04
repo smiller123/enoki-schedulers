@@ -26,6 +26,7 @@ use bento::bindings as c;
 use bento::kernel::ffi;
 use bento::kernel::raw;
 use bento::scheduler_utils::*;
+use bento::kernel::cpu::*;
 //use rbtree::RBTree;
 
 use bento::std::ffi::OsStr;
@@ -77,7 +78,7 @@ pub fn rust_main(record_file: *const i8) {
         //println!("record_file {}", *record_file);
         //println!("record_file {}", *record_file.offset(1));
         let mut cpu_state = BTreeMap::new();
-        for i in 0..8 {
+        for i in 0..num_online_cpus() as u32 {
             let state = CpuState {
                 weight: 0,
                 inv_weight: 0,
