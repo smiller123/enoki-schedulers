@@ -1,28 +1,13 @@
-//#![feature(lang_items)]
-//#![feature(concat_idents)]
-//#![feature(allocator_api)]
-//#![feature(alloc_error_handler)]
-//#![feature(alloc_layout_extra)]
-//#![feature(panic_info_message)]
-//#![feature(rustc_private)]
-//#![allow(improper_ctypes)]
-//#![feature(const_btree_new)]
-//#![no_std]
-
 #![feature(let_chains)]
 
 extern crate alloc;
 extern crate scheduler_utils;
-//extern crate spin;
 extern crate core;
 extern crate serde;
 
-pub mod enclave;
-pub mod ghost;
 pub mod sched;
 
 use std::env;
-//use spin::RwLock;
 
 use sched::BentoSched;
 use scheduler_utils::BentoScheduler;
@@ -62,7 +47,6 @@ fn main() {
         found_lock = false;
         for line_res in lines {
             if let Ok(line) = line_res {
-                //println!("line is {}", line);
                 let line_split = line.clone();
                 let mut split = line_split.split_whitespace();
                 let command = split.next().unwrap();
@@ -144,7 +128,6 @@ fn main() {
                     let handle = thread::Builder::new().name(kpid.to_string()).spawn(move || {
                         bento_clone.task_dead(pid)
                     }).unwrap();
-                    //bento_sched.task_dead(pid);
                 },
                 Some("blocked:") => {
                     let kpid_str = split.next().unwrap();
@@ -168,7 +151,6 @@ fn main() {
                     let handle = thread::Builder::new().name(kpid.to_string()).spawn(move || {
                         bento_clone.task_blocked(pid, runtime, cpu_seqnum, cpu, from_switchto, sched)
                     }).unwrap();
-                    //bento_sched.task_blocked(pid, runtime, cpu_seqnum, cpu, from_switchto, sched);
                 },
                 Some("wakeup:") => {
                     let kpid_str = split.next().unwrap();
@@ -195,8 +177,6 @@ fn main() {
                         bento_clone.task_wakeup(pid, agent_data, deferrable > 0,
                                             last_ran_cpu, wake_up_cpu, waker_cpu, sched);
                     }).unwrap();
-                    //bento_sched.task_wakeup(pid, agent_data, deferrable > 0,
-                     //                       last_ran_cpu, wake_up_cpu, waker_cpu, sched);
                 },
                 Some("new:") => {
                     let kpid_str = split.next().unwrap();
@@ -217,7 +197,6 @@ fn main() {
                     let handle = thread::Builder::new().name(kpid.to_string()).spawn(move || {
                         bento_clone.task_new(pid, runtime, runnable, sched);
                     }).unwrap();
-                    //bento_sched.task_new(pid, runtime, runnable, sched);
                 },
                 Some("preempt:") => {
                     let kpid_str = split.next().unwrap();
@@ -244,8 +223,6 @@ fn main() {
                         bento_clone.task_preempt(pid, runtime, cpu_seqnum,
                                              cpu, from_switchto, was_latched, sched);
                     }).unwrap();
-                    //bento_sched.task_preempt(pid, runtime, cpu_seqnum,
-                     //                        cpu, from_switchto, was_latched, sched);
                 },
                 Some("yield:") => {
                     let kpid_str = split.next().unwrap();
@@ -266,8 +243,6 @@ fn main() {
                         bento_clone.task_yield(pid, runtime, cpu_seqnum,
                                              cpu, from_switchto);
                     }).unwrap();
-                    //bento_sched.task_yield(pid, runtime, cpu_seqnum,
-                     //                        cpu, from_switchto);
                 },
                 Some("departed:") => {
                     let kpid_str = split.next().unwrap();
@@ -288,8 +263,6 @@ fn main() {
                         bento_clone.task_departed(pid, cpu_seqnum,
                                              cpu, from_switchto, was_current);
                     }).unwrap();
-                    //bento_sched.task_departed(pid, cpu_seqnum,
-                     //                        cpu, from_switchto, was_current);
                 },
                 Some("switchto:") => {
                     let kpid_str = split.next().unwrap();
@@ -307,7 +280,6 @@ fn main() {
                     let handle = thread::Builder::new().name(kpid.to_string()).spawn(move || {
                         bento_clone.task_switchto(pid, runtime, cpu_seqnum, cpu);
                     }).unwrap();
-                    //bento_sched.task_switchto(pid, runtime, cpu_seqnum, cpu);
                 },
                 Some("affinity:") => {
                     let kpid_str = split.next().unwrap();
@@ -319,7 +291,6 @@ fn main() {
                     let handle = thread::Builder::new().name(kpid.to_string()).spawn(move || {
                         bento_clone.task_affinity_changed(pid);
                     }).unwrap();
-                    //bento_sched.task_affinity_changed(pid);
                 },
                 Some("latched:") => {
                     let kpid_str = split.next().unwrap();
@@ -339,7 +310,6 @@ fn main() {
                     let handle = thread::Builder::new().name(kpid.to_string()).spawn(move || {
                         bento_clone.task_latched(pid, commit_time, cpu_seqnum, cpu, latched_preempt);
                     }).unwrap();
-                    //bento_sched.task_latched(pid, commit_time, cpu_seqnum, cpu, latched_preempt);
                 },
                 Some("tick:") => {
                     let kpid_str = split.next().unwrap();
@@ -351,7 +321,6 @@ fn main() {
                     let handle = thread::Builder::new().name(kpid.to_string()).spawn(move || {
                         bento_clone.cpu_tick(cpu);
                     }).unwrap();
-                    //bento_sched.cpu_tick(cpu);
                 },
                 Some("not_idle:") => {
                     let kpid_str = split.next().unwrap();
@@ -365,7 +334,6 @@ fn main() {
                     let handle = thread::Builder::new().name(kpid.to_string()).spawn(move || {
                         bento_clone.cpu_not_idle(cpu, next_pid);
                     }).unwrap();
-                    //bento_sched.cpu_not_idle(cpu, next_pid);
                 },
                 Some("select_rq:") => {
                     let kpid_str = split.next().unwrap();
@@ -378,8 +346,6 @@ fn main() {
                         bento_clone.select_task_rq(pid)
                     }).unwrap();
                     select_response_hands.insert(pid, handle);
-                    //let cpu = bento_sched.select_task_rq(pid);
-                    //select_response.insert(pid, cpu);
                 },
                 Some("select_rq_ret:") => {
                     let kpid_str = split.next().unwrap();
@@ -392,7 +358,6 @@ fn main() {
                     }
                     let handle = select_response_hands.remove(&pid).unwrap();
                     let response = handle.join().unwrap();
-                    //let response = select_response.get(&pid).unwrap();
                     let got = alloc::format!("{}", response);
                     let expected = split.next().unwrap();
                     if got != expected {
@@ -407,7 +372,6 @@ fn main() {
                     let handle = thread::Builder::new().name(kpid.to_string()).spawn(move || {
                         bento_clone.selected_task_rq(sched);
                     }).unwrap();
-                    //bento_sched.selected_task_rq(sched);
                 },
                 Some("migrate_rq:") => {
                     let kpid_str = split.next().unwrap();
@@ -425,7 +389,6 @@ fn main() {
                     let handle = thread::Builder::new().name(kpid.to_string()).spawn(move || {
                         bento_clone.migrate_task_rq(pid, sched);
                     }).unwrap();
-                    //bento_sched.migrate_task_rq(pid, sched);
                 },
                 Some("balance:") => {
                     let kpid_str = split.next().unwrap();
@@ -437,9 +400,7 @@ fn main() {
                     let handle = thread::Builder::new().name(kpid.to_string()).spawn(move || {
                         bento_clone.balance(cpu)
                     }).unwrap();
-                    //let res = bento_sched.balance(cpu);
                     balance_response_hands.insert(cpu, handle);
-                    //balance_response.insert(cpu, res);
                 },
                 Some("balance_ret:") => {
                     let kpid_str = split.next().unwrap();
@@ -452,14 +413,12 @@ fn main() {
                     }
                     let handle = balance_response_hands.remove(&cpu).unwrap();
                     let response = handle.join().unwrap();
-                    //let response = balance_response.get(&cpu).unwrap();
                     let got = alloc::format!("{:?}", response);
                     let expected = split.next().unwrap();
                     if got != expected {
                         println!("Expected balance response {}, got {}",
                                  expected, got);
                     }
-                    //balance_response.remove(&cpu);
                 },
                 Some("create_queue") => {
                     let kpid_str = split.next().unwrap();
@@ -473,7 +432,6 @@ fn main() {
                         let handle = thread::Builder::new().name(kpid.to_string()).spawn(move || {
                             bento_clone.register_queue(buffer);
                         }).unwrap();
-                        //bento_sched.register_queue(buffer);
                     }
                 },
                 Some("create_reverse_queue") => {
@@ -488,7 +446,6 @@ fn main() {
                         let handle = thread::Builder::new().name(kpid.to_string()).spawn(move || {
                             bento_clone.register_reverse_queue(buffer);
                         }).unwrap();
-                        //bento_sched.register_reverse_queue(buffer);
                     }
                 },
                 Some("enter_queue:") => {
@@ -501,7 +458,6 @@ fn main() {
                     let handle = thread::Builder::new().name(kpid.to_string()).spawn(move || {
                         bento_clone.enter_queue(entries);
                     }).unwrap();
-                    //bento_sched.enter_queue(entries);
                 },
                 Some("unregister_queue:") => {
                     let kpid_str = split.next().unwrap();
@@ -511,7 +467,6 @@ fn main() {
                     let handle = thread::Builder::new().name(kpid.to_string()).spawn(move || {
                         bento_clone.unregister_queue();
                     }).unwrap();
-                    //bento_sched.unregister_queue();
                 },
                 Some("unregister_reverse_queue:") => {
                     let kpid_str = split.next().unwrap();
@@ -521,7 +476,6 @@ fn main() {
                     let handle = thread::Builder::new().name(kpid.to_string()).spawn(move || {
                         bento_clone.unregister_rev_queue();
                     }).unwrap();
-                    //bento_sched.unregister_rev_queue();
                 },
                 Some("dequeue2:") => {
                     let kpid_str = split.next().unwrap();
@@ -559,9 +513,7 @@ fn main() {
                     let handle = thread::Builder::new().name(kpid.to_string()).spawn(move || {
                         bento_clone.parse_hint(hint);
                     }).unwrap();
-                    //bento_sched.parse_hint(hint);
                 },
-                //Some("dequeue:") => {},
                 _ => {},
             }
 

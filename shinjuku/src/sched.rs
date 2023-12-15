@@ -13,34 +13,17 @@ use serde::{Serialize, Deserialize};
 
 use self::scheduler_utils::*;
 
-//use bento::bindings as c;
-//use bento::kernel::ffi;
-//use bento::kernel::raw;
-
-//use bento::std::ffi::OsStr;
-//use bento::kernel::kobj::CStr;
-
-//use spin::RwLock;
-
-//use bento::spin_rs;
-//use bento::spin_rs::RwLock;
-
-//use enclave::LocalEnclave;
-//use ghost::Ghost;
-
 use alloc::collections::vec_deque::VecDeque;
 use alloc::collections::btree_map::BTreeMap;
 use alloc::collections::btree_set::BTreeSet;
 
 use core::mem;
 use core::str;
-use core::fmt::Debug;
 
 use self::ringbuffer::RingBuffer;
 use self::sched_core::resched_cpu;
 use bento::kernel::time::Timespec64;
 use bento::kernel::time::getnstimeofday64_rs;
-use bento::kernel::time::diff_ns;
 
 #[repr(C)]
 pub struct BentoSched {
@@ -71,92 +54,56 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         10
     }
 
-    fn task_new(&self, pid: u64, _runtime: u64, runnable: u16, _prio: i32, sched: Schedulable, _guard: RQLockGuard) {
-        //println!("In task_new {} {}", pid, sched.get_cpu());
+    fn task_new(&self, pid: u64, _tgid: u64, _runtime: u64, runnable: u16, _prio: i32, sched: Schedulable, _guard: RQLockGuard) {
         if runnable > 0 {
             let mut map = self.map2.as_ref().unwrap().write();
             let qs = self.qs.as_ref().unwrap().read();
             let mut q = qs.get(&sched.get_cpu()).unwrap().write();
-            //let mut q = self.q.as_ref().unwrap().write();
             let mut pid_state = self.pid_state.as_ref().unwrap().write();
             let cpu = sched.get_cpu();
-            //if !q.contains(&pid) && sched.get_cpu() < u32::MAX {
             if !q.contains(&pid) {
                 q.push_back(pid);
             }
-            //map.insert(pid, sched);
             map.insert(pid, RwLock::new(Some(sched)));
             if cpu != u32::MAX {
                 pid_state.insert(pid, cpu);
             }
         } else {
             let mut map = self.map2.as_ref().unwrap().write();
-            //map.insert(pid, sched);
             map.insert(pid, RwLock::new(Some(sched)));
         }
     }
 
-    fn task_wakeup(&self, pid: u64, _agent_data: u64, deferrable: bool,
+    fn task_wakeup(&self, pid: u64, _deferrable: bool,
                    _last_run_cpu: i32, _wake_up_cpu: i32, _waker_cpu: i32,
                    sched: Schedulable, guard: RQLockGuard) {
-        //if sched.get_cpu() == 3 {
-        //println!("In task_wakeup {} {}", pid, sched.get_cpu());
-       // }
-        //let mut start = Timespec64::new();
-        //getnstimeofday64_rs(&mut start);
-        //{
-        //    let mut timing = self.timing.as_ref().unwrap().write();
-        //    timing.insert(pid, start);
-        //}
-        //let mut map = self.map.as_ref().unwrap().write();
-        let mut map = self.map2.as_ref().unwrap().read();
+        let map = self.map2.as_ref().unwrap().read();
         let sched_lock = map.get(&pid).unwrap();
         let mut sched_val = sched_lock.write();
         let qs = self.qs.as_ref().unwrap().read();
         let mut q = qs.get(&sched.get_cpu()).unwrap().write();
-        //let mut q = self.q.as_ref().unwrap().write();
-        //let mut pid_state = self.pid_state.as_ref().unwrap().write();
         if !q.contains(&pid) {
             q.push_back(pid);
         }
-        //pid_state.insert(pid, sched.get_cpu());
-        //map.insert(pid, sched);
-        //hrtick::hrtick_start(sched.get_cpu() as i32, 10000);
         let cpu = sched.get_cpu();
         sched_val.replace(sched);
-        //let cpu_running = self.cpu_running.as_ref().unwrap().read();
-        //if !cpu_running.contains(&cpu) {
-            //hrtick::hrtick_start(cpu as i32, 10000);
         if q.len() == 1 {
             resched_cpu(cpu as i32, &guard);
         }
-        //}
-        //let is_run = cpu_running.get(
-        //if cpu_running.g
-        //if let Some(false) == cpu_running.get(&(cpu as u32)) {
-        //}
     }
 
-    fn task_preempt(&self, pid: u64, _runtime: u64, _cpu_seqnum: u64, cpu: i32,
+    fn task_preempt(&self, pid: u64, _runtime: u64, _cpu_seqnum: u64, _cpu: i32,
                     _from_switchto: i8, _was_latched: i8, sched: Schedulable, _guard: RQLockGuard) {
-        //if cpu == 3 {
-        //println!("In task_preempt {} {}", pid, sched.get_cpu());
-        //}
         let map = self.map2.as_ref().unwrap().read();
         let sched_lock = map.get(&pid).unwrap();
         let mut sched_val = sched_lock.write();
 
-        //let mut map = self.map.as_ref().unwrap().write();
         let qs = self.qs.as_ref().unwrap().read();
         let mut q = qs.get(&sched.get_cpu()).unwrap().write();
-        //let mut q = self.q.as_ref().unwrap().write();
-        //let mut pid_state = self.pid_state.as_ref().unwrap().write();
 
         if !q.contains(&pid) {
             q.push_back(pid);
         }
-        //pid_state.insert(pid, sched.get_cpu());
-        //map.insert(pid, sched);
         sched_val.replace(sched);
     }
 
@@ -165,10 +112,8 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         let map = self.map2.as_ref().unwrap().read();
         let sched_lock = map.get(&pid).unwrap();
         let mut sched_val = sched_lock.write();
-        //let mut map = self.map.as_ref().unwrap().write();
         let qs = self.qs.as_ref().unwrap().read();
         let mut q = qs.get(&(cpu as u32)).unwrap().write();
-        //let mut q = self.q.as_ref().unwrap().write();
         // position depends on iterator state, so don't use iterator before we call position
         if q.contains(&pid) {
             if let Some(idx) = q.iter().position(|&x| x == pid) {
@@ -176,10 +121,6 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
             }
         }
         sched_val.take();
-        //map.remove(&pid);
-        //if cpu == 3 {
-        //println!("In task_blocked {} {:?}", pid, q);
-        //}
         {
         let mut cpu_running = self.cpu_running.as_ref().unwrap().write();
         cpu_running.remove(&(cpu as u32));
@@ -187,215 +128,79 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
     }
 
     fn task_yield(
-        &self, pid: u64, runtime: u64,
+        &self, pid: u64, _runtime: u64,
         _cpu_seqnum: u64, cpu: i32, _from_switchto: i8, sched: Schedulable, _guard: RQLockGuard
     ) {
-        //if cpu == 3 {
-        //println!("yield pid {} cpu {}", pid, cpu);
-        //}
         let map = self.map2.as_ref().unwrap().read();
         let sched_lock = map.get(&pid).unwrap();
         let mut sched_val = sched_lock.write();
-        //let mut map = self.map.as_ref().unwrap().write();
         let qs = self.qs.as_ref().unwrap().read();
         let mut q = qs.get(&sched.get_cpu()).unwrap().write();
-        //let mut q = self.q.as_ref().unwrap().write();
-        //let mut pid_state = self.pid_state.as_ref().unwrap().write();
         if !q.contains(&pid) {
             q.push_back(pid);
         }
-        //pid_state.insert(pid, sched.get_cpu());
         sched_val.replace(sched);
         {
         let mut cpu_running = self.cpu_running.as_ref().unwrap().write();
         cpu_running.remove(&(cpu as u32));
         }
-        //map.insert(pid, sched);
-        //let cpu = sched.get_cpu();
-        //{
-        //    let mut map = self.map.as_ref().unwrap().write();
-        //    if map.get(&pid).is_none() {
-        //        map.insert(pid, sched);
-        //    }
-        //}
-        //let mut state = self.state.as_ref().unwrap().write();
-        //let proc_state = state.get_mut(&pid).unwrap();
-
-        //let all_cpu_state = self.cpu_state.as_ref().unwrap().read();
-        //let mut cpu_state = all_cpu_state.get(&cpu).unwrap().write();
-        //let mut real_set = &mut cpu_state.set;
-        //let remove_val = (old_vruntime, pid);
-        //real_set.remove(&remove_val);
-        //
     }
 
-    fn pick_next_task(&self, cpu: i32, curr_sched: Option<Schedulable>, 
-                      curr_runtime: Option<u64>, _guard: RQLockGuard) -> Option<Schedulable> {
+    fn pick_next_task(&self, cpu: i32, _curr_sched: Option<Schedulable>, 
+                      _curr_runtime: Option<u64>, _guard: RQLockGuard) -> Option<Schedulable> {
         let mut start = Timespec64::new();
         getnstimeofday64_rs(&mut start);
         let map = self.map2.as_ref().unwrap().read();
-        //let sched_lock = map.get(&pid).unwrap();
-        //let mut sched_val = sched_lock.write();
-        //let mut map = self.map.as_ref().unwrap().write();
         let qs = self.qs.as_ref().unwrap().read();
         let mut q = qs.get(&(cpu as u32)).unwrap().write();
-        //let mut q = self.q.as_ref().unwrap().write();
-        //if cpu != 3 {
-        //    return None;
-        //}
-       
-        //println!("In pick next task");
 
-        let mut idx : usize = 0usize;
         if let Some(pid) = q.pop_front() {
-        //while idx < q.len() {
-            // cycle through the queue until we find first task belonging to this CPU
-            //if let Some(pid) = q.get(idx) {
-                let sched_lock = map.get(&pid).unwrap();
-                let mut sched_val = sched_lock.write();
-                //if map.get(&pid).is_some() {
-                if sched_val.is_some() {
-                    // if this task's cpu matches current target cpu, use this task
-                    //if (map.get(&pid).unwrap().get_cpu() == cpu as u32 ||
-                    //    map.get(&pid).unwrap().get_cpu() == u32::MAX) {
-                    //if (map.get(&pid).unwrap().get_cpu() == cpu as u32) {
-                    let retval = sched_val.take().unwrap();
-                    //if (sched_val.unwrap().as_ref().get_cpu() == cpu as u32) {
-                    if (retval.get_cpu() == cpu as u32) {
-                        //let pid = q.remove(idx).unwrap();
-                        //if q.len() > 0 {
-                        //hrtick::hrtick_start(cpu, 10);
-                        //hrtick::hrtick_start(cpu, 10000);
-                        //hrtick::hrtick_start(cpu, 30000);
-                        //}
-                        //let mut pick = Timespec64::new();
-                        //getnstimeofday64_rs(&mut pick);
-                        //if cpu == 3 {
-                        //    let mut timing = self.timing.as_ref().unwrap().write();
-                        //    if let Some(wake) = timing.get(&pid) {
-                        //        let diff = diff_ns(&pick, wake);
-                        //        if diff > 1000000 {
-                        //            //println!("pid {} waited {}\n", pid, diff);
-                        //        }
-                        //    }
-                        ////println!("pick next task would return {} for cpu {}, {:?} start {}.{}", pid, cpu, q, start.tv_sec, start.tv_nsec);
-                        //}
-                        //let mut end = Timespec64::new();
-                        //getnstimeofday64_rs(&mut end);
-                        //let diff = diff_ns(&end, &start);
-                        //println!("pnt inner took {}", diff);
-                        let mut cpu_running = self.cpu_running.as_ref().unwrap().write();
-                        cpu_running.insert(cpu as u32);
-                        hrtick::hrtick_start(cpu, 10000);
-                        //return map.remove(&pid);
-                        return Some(retval);
-                    } else {
-                        // Something has gone horribly wrong
-                        sched_val.replace(retval);
-                        q.push_back(pid);
-                    }
-                    //if (cpu == 0 &&
-                    //    map.get(&pid).unwrap().get_cpu() == u32::MAX) {
-                    //    let pid = q.remove(idx).unwrap();
-                    //    return map.remove(&pid);
-                    //}
+            let sched_lock = map.get(&pid).unwrap();
+            let mut sched_val = sched_lock.write();
+            if sched_val.is_some() {
+                let retval = sched_val.take().unwrap();
+                if retval.get_cpu() == cpu as u32 {
+                    let mut cpu_running = self.cpu_running.as_ref().unwrap().write();
+                    cpu_running.insert(cpu as u32);
+                    hrtick::hrtick_start(cpu, 10000);
+                    return Some(retval);
+                } else {
+                    // Something has gone horribly wrong
+                    sched_val.replace(retval);
+                    q.push_back(pid);
                 }
-            //}
-            //idx += 1;
+            }
         }
         let mut cpu_running = self.cpu_running.as_ref().unwrap().write();
         cpu_running.remove(&(cpu as u32));
-
-        //if (idx >= q.len()) {
-        //    //println!("Returning none 1 from pick_next_task");
-        //    return None;
-        //}
-
-        //if let Some(pid) = q.remove(idx) {
-        //    hrtick::hrtick_start(cpu, 10000);
-
-        //    //println!("Returning Some from pick_next_task");
-        //    //println!("pid = {}, cpu = {}", map.get(&pid).unwrap().get_pid(), map.get(&pid).unwrap().get_cpu());
-        //    return map.remove(&pid);
-        //}
-
-        //println!("Returning none 2 from pick_next_task");
 
         return None;
-        //return curr_sched;
-
-        // if let Some(pid) = q.pop_front() {
-            // let map = self.map.as_ref().unwrap().read();
-            // if map.get(&pid).is_none() {
-                // println!("Terrible problem, pid has no cpu");
-                // q.push_front(pid);
-                // return None;
-            // }
-            // if (map.get(&pid).unwrap().get_cpu() == cpu as u32 ||
-                // map.get(&pid).unwrap().get_cpu() == u32::MAX) {
-
-                //println!("pnt cpu {} would pick {}", cpu, pid);
-                //return None;
-                //Some(pid)
-                // None shouldn't happen anymore
-                // TODO: probably should turn this into a constant
-                // hrtick::hrtick_start(cpu, 10000);
-                // Some(*map.get(&pid).unwrap())
-            // } else {
-                //println!("can't schedule on other cpu\n");
-                // q.push_front(pid);
-                // None
-            // }
-        //} else {
-            //None
-        //}
     }
 
-    fn pnt_err(&self, cpu: i32, pid: u64, err: i32, _sched: Option<Schedulable>, _guard: RQLockGuard) {
-        {
+    fn pnt_err(&self, cpu: i32, _pid: u64, _err: i32, _sched: Option<Schedulable>, _guard: RQLockGuard) {
         let mut cpu_running = self.cpu_running.as_ref().unwrap().write();
         cpu_running.remove(&(cpu as u32));
-        }
-        //println!("In pnt_err {}", pid);
-        //let mut map = self.map.as_ref().unwrap().write();
-        //map.insert(sched.get_pid(), sched);
     }
 
     fn select_task_rq(&self, pid: u64, _waker_cpu: i32, _prev_cpu: i32) -> i32 {
-        //println!("In select_task_rq {}", pid);
-        let mut pid_state = self.pid_state.as_ref().unwrap().read();
+        let pid_state = self.pid_state.as_ref().unwrap().read();
         match pid_state.get(&pid) {
             None => {
-                //(pid as i32 % 6)
                 (pid as i32 % 5) + 3
-                //3
             },
             Some(cpu) => *cpu as i32,
         }
     }
 
     fn selected_task_rq(&self, sched: Schedulable) {
-        //println!("In selected_task_rq");
-        //let mut q = self.q.as_ref().unwrap().read();
-        //let mut map = self.map.as_ref().unwrap().write();
         let mut pid_state = self.pid_state.as_ref().unwrap().write();
         pid_state.insert(sched.get_pid(), sched.get_cpu());
-        //println!("select adding sched {:?} q {:?}, map {:?}", sched, q, map);
-        // TODO: why the fuck do we need this???
-        //if q.contains(&sched.get_pid()) {
-        //map.insert(sched.get_pid(), sched);
-        //}
     }
 
-    //fn migrate_task_rq(&self, pid: u64, new_cpu: i32) {
     fn migrate_task_rq(&self, pid: u64, sched: Schedulable, _guard: RQLockGuard) -> Schedulable {
-        //println!("in migrate");
-        //println!("hitting migrate_task_rq pid {} to cpu {}", pid, sched.get_cpu());
-        //let mut q = self.q.as_ref().unwrap().write();
         let map = self.map2.as_ref().unwrap().read();
         let sched_lock = map.get(&pid).unwrap();
         let mut sched_val = sched_lock.write();
-        //let mut map = self.map.as_ref().unwrap().write();
 
         let qs = self.qs.as_ref().unwrap().read();
         let mut new_q = qs.get(&sched.get_cpu()).unwrap().write();
@@ -403,18 +208,15 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
 
         let cpu = sched.get_cpu();
         let old_sched = sched_val.replace(sched).unwrap();
-        //let old_sched = map.remove(&pid).unwrap();
         let mut old_q = qs.get(&old_sched.get_cpu()).unwrap().write();
         if let Some(idx) = old_q.iter().position(|&x| x == pid) {
             old_q.remove(idx);
         }
         if !new_q.contains(&pid) {
-            //new_q.push_back(pid);
             new_q.push_front(pid);
         }
 
         pid_state.insert(pid, cpu);
-        //map.insert(pid, sched);
 
         // TODO: sus?
         let mut moved = self.moved.as_ref().unwrap().write();
@@ -423,20 +225,14 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
     }
 
     fn balance(&self, cpu: i32, _guard: RQLockGuard) -> Option<u64> {
-        //println!("In balance");
-        //return None;
         if cpu < 3 {
             return None;
         }
-        let map = self.map2.as_ref().unwrap().read();
         let qs = self.qs.as_ref().unwrap().read();
         let q_len = {
             let q = qs.get(&(cpu as u32)).unwrap().read();
             q.len()
         };
-        //if q.len() > 0 {
-        //    return None;
-        //}
         let mut longest_q = None;
         let mut max_q_len = q_len;
         for i in 0..8 {
@@ -444,7 +240,6 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
                 continue;
             }
             let q = qs.get(&(i as u32)).unwrap().read();
-            //if q.len() > max_q_len && q.len() > q_len + 3 {
             if q.len() > max_q_len {
                 max_q_len = q.len();
                 longest_q = Some(i);
@@ -455,92 +250,18 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
             return None;
         }
         let q = qs.get(&(longest_q.unwrap() as u32)).unwrap().read();
-        //let q = self.q.as_ref().unwrap().read();
         let mut moved = self.moved.as_ref().unwrap().write();
-        //{
-        //    let cpu_running = self.cpu_running.as_ref().unwrap().read();
-        //    if cpu_running.contains(&(cpu as u32)) {
-        //        return None;
-        //    }
-        //}
-        //for pid in q.iter() {
-        //    if let Some(sched_lock) = map.get(pid) {
-        //        let sched_opt = sched_lock.read();
-        //        if sched_opt.is_some() {
-        //            let sched = sched_opt.as_ref().unwrap();
-        //            if sched.get_cpu() == cpu as u32 {
-        //                return None;
-        //            }
-        //        }
-        //        //if let Some(sched) = sched_opt && sched.get_cpu() == cpu as u32 {
-        //        //    return None;
-        //        //}
-        //    }
-        //    //if let Some(sched) = map.get(pid) && sched.get_cpu() == cpu as u32 {
-        //    //    return None;
-        //    //}
-        //}
-        let mut next = &0;
+        let next;
         if let Some(opt) = q.front() {
             next = opt;
-            //let mut num_shared = 0;
-            //let this_cpu = map.get(next).unwrap().read().as_ref().unwrap().get_cpu();
-            //for pid in q.iter() {
-            //    if let Some(sched_lock) = map.get(pid) {
-            //        let sched_opt = sched_lock.read();
-            //        if sched_opt.is_some() {
-            //            let sched = sched_opt.as_ref().unwrap();
-            //            if sched.get_cpu() == this_cpu as u32 {
-            //                num_shared += 1;;
-            //            }
-            //        }
-            //    }
-            //}
-            //if num_shared <= 1 {
-            //    return None;
-            //}
-            //let this_cpu = map.get(next).unwrap().get_cpu();
-            // TODO: put this back in?
-            //for pid in q.iter() {
-            //    if let Some(sched) = map.get(pid) && sched.get_cpu() == this_cpu as u32 {
-            //        num_shared += 1;
-            //    }
-            //}
-            //if num_shared <= 1 {
-            //    return None;
-            //}
             if moved.contains(next) {
                 return None;
             }
-            //println!("would move {} to cpu {} shared {}: {} {} {:?} {:?}", *next, cpu, num_shared, q.len(), map.len(), q, map);
             moved.insert(*next);
-        //return None;
             return Some(*next);
         } else {
             return None;
         }
-        // let mut map = self.map.as_ref().unwrap().write();
-        // if let Some(old_sched) = map.get(next) {
-            // let new_sched = Schedulable {
-            //    pid: *next,
-            //    cpu: cpu as u32
-            // };
-            // println!("shifting proc {} to cpu 1", *next);
-            // map.insert(*next, new_sched);
-            // return Some(*next);
-        // }
-        // return None;
-    }
-
-    fn balance_err(
-        &self,
-        cpu: i32,
-        pid: u64,
-        _err: i32,
-        _sched: Option<Schedulable>,
-        _guard: RQLockGuard
-    ) {
-        //println!("balance err cpu {} pid {}\n", cpu, pid);
     }
 
     fn reregister_prepare(&mut self) -> Option<UpgradeData> {
@@ -560,57 +281,19 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         }
     }
 
-    fn register_queue(&self, q: RingBuffer<UserMessage>) -> i32 {
-        //println!("q ptr {:?}", q.inner);
-        unsafe {
-        //println!("q ptr {:?}", (*q.inner).offset);
-        //println!("q capacity {}", (*q.inner).capacity);
-        //println!("q readptr {}", (*q.inner).readptr);
-        //println!("q writeptr {}", (*q.inner).writeptr);
+    fn register_queue(&self, _pid: u64, q: RingBuffer<UserMessage>) -> i32 {
         let mut user_q = self.user_q.as_ref().unwrap().write();
         let next = user_q.keys().max().map_or(0, |max| max + 1);
         user_q.insert(next as i32, q);
 
         return next as i32;
-        // user_q.replace(q);
-        //
-
-        //self.user_q = Some(RwLock::new(q));
-        }
     }
 
-    fn register_reverse_queue(&self, q: RingBuffer<UserMessage>) -> i32 {
-        //println!("q ptr {:?}", q.inner);
-        unsafe {
-        //println!("q ptr {:?}", (*q.inner).offset);
-        //println!("q capacity {}", (*q.inner).capacity);
-        //println!("q readptr {}", (*q.inner).readptr);
-        //println!("q writeptr {}", (*q.inner).writeptr);
+    fn register_reverse_queue(&self, _pid: u64, q: RingBuffer<UserMessage>) -> i32 {
         let mut rev_q = self.rev_q.as_ref().unwrap().write();
         let next = rev_q.keys().max().map_or(0, |max| max + 1);
         rev_q.insert(next as i32, q);
         return next as i32;
-        // rev_q.replace(q);
-
-        //self.user_q = Some(RwLock::new(q));
-        }
-    }
-
-    fn enter_queue(&self, id: i32, entries: u32) {
-        let mut user_q_list = self.user_q.as_ref().unwrap().write();
-        let user_q = user_q_list.get_mut(&id).unwrap();
-
-
-        // let mut user_q_guard = self.user_q.as_ref().unwrap().write();
-        // let user_q = user_q_guard.as_mut().unwrap();
-        for i in 0..entries {
-        //unsafe {
-        //println!("user_q head {}", (*user_q.inner).writeptr);
-        //println!("user_q tail {}", (*user_q.inner).readptr);
-        //}
-            let msg = user_q.dequeue();
-        //println!("msg val {:?}", msg);
-        }
     }
 
     fn unregister_queue(&self, id: i32) -> RingBuffer<UserMessage> {
@@ -631,47 +314,23 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
 
     fn task_tick(&self, cpu: i32, queued: bool, guard: RQLockGuard) {
         if queued {
-            //println!("ticking {}", cpu);
-            unsafe {
-                // TODO: If we are including a guard parameter, shouldn't we use
-                // some function that acquires the lock?
-                //bento::bindings::resched_cpu_no_lock(cpu);
-                //if cpu == 3 {
-                //let mut start = Timespec64::new();
-                //getnstimeofday64_rs(&mut start);
-                ////println!("resched cpu {}.{}", start.tv_sec, start.tv_nsec);
-                //}
-                resched_cpu(cpu, &guard);
-            }
+            resched_cpu(cpu, &guard);
         }
     }
 
     fn task_departed(&self, pid: u64, _cpu_seqnum: u64, cpu: i32, 
                      _from_switchto: i8, _was_current: i8, _guard: RQLockGuard) -> Schedulable {
-        //println!("in task_departed");
-        //let mut map = self.map.as_ref().unwrap().write();
         let mut map = self.map2.as_ref().unwrap().write();
         let qs = self.qs.as_ref().unwrap().read();
         let mut q = qs.get(&(cpu as u32)).unwrap().write();
-        //let mut q = self.q.as_ref().unwrap().write();
-        //if q.contains(&pid) {
         if let Some(idx) = q.iter().position(|&x| x == pid) {
             q.remove(idx);
         }
-        //}
         map.remove(&pid).unwrap().write().take().unwrap()
     }
 
     fn task_dead(&self, pid: u64, _guard: RQLockGuard) {
-        //println!("in task_dead");
-        //let mut q = self.q.as_ref().unwrap().write();
-        //let mut map = self.map.as_ref().unwrap().write();
         let mut map = self.map2.as_ref().unwrap().write();
-        //if q.contains(&pid) {
-        //if let Some(idx) = q.iter().position(|&x| x == pid) {
-         //   q.remove(idx);
-        //}
-        //}
         if let Some(sched_lock) = map.remove(&pid) {
             let sched_opt = sched_lock.write().take();
             if let Some(sched) = sched_opt {
@@ -684,10 +343,3 @@ impl BentoScheduler<'_, '_, UpgradeData, UpgradeData, UserMessage, UserMessage> 
         }
     }
 }
-
-//bento::kernel_module!(
-//    BentoGhostModule,
-//    author: b"Bento Contributors",
-//    description: b"kernel module to replace the scheduler",
-//    license: b"GPL"
-//);

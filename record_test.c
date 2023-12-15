@@ -17,33 +17,15 @@ struct queue {
 	uint32_t tail;
 };
 
-//struct sched_msg {
-//	uint32_t val;
-//};
-//
-//void enqueue(struct queue *q, struct sched_msg msg) {
-//	struct sched_msg *ptr = (void *)q + q->offset;
-//	printf("ptr start %p\n", ptr);
-//	uint32_t index = q->head & (q->capacity - 1);
-//	ptr += index;
-//	printf("ptr curr %p\n", ptr);
-//	ptr->val = msg.val;
-//	printf("ptr val %d\n", ptr->val);
-//	q->head += 1;
-//    //msg = (struct sched_msg *)((void *)map_region + q->offset);
-//}
-
 char *dequeue(struct queue *q) {
 	char *ptr = (void *)q + q->offset;
 	printf("ptr start %p\n", ptr);
 	uint32_t index = q->tail & (q->capacity - 1);
 	ptr += index * 256;
 	printf("ptr curr %p\n", ptr);
-	//ptr->val = msg.val;
 	printf("ptr val %s\n", ptr);
 	q->tail += 1;
 	return ptr;
-    //msg = (struct sched_msg *)((void *)map_region + q->offset);
 }
 
 main ()
@@ -54,12 +36,9 @@ main ()
     strcpy(command, "perf bench sched pipe");
     int fd;
     struct bento_ioc_create_queue create_queue;
-    //struct bento_ioc_enter_queue enter_queue;
     void *map_region;
     struct queue *q;
-    //uint32_t next = 0;
     int q_fd;
-    //struct sched_msg msg;
 
     create_queue.elems = 16;
     create_queue.flags = 0;
@@ -80,30 +59,9 @@ main ()
     printf("q capacity %d\n", q->capacity);
     printf("q head %d\n", q->head);
     printf("q tail %d\n", q->tail);
-    //while (true) {
-    //    if (q->head > q->tail) {
-    //        dequeue(q);
-    //    }
-    //}
-    //msg = (struct sched_msg *)((void *)map_region + q->offset);
-    //msg->val = 10;
-    //q->head += 1;
-
-    //msg.val = 10;
-    //enqueue(q, msg);
-    //msg.val = 20;
-    //enqueue(q, msg);
-    //msg.val = 30;
-    //enqueue(q, msg);
-
-    //enter_queue.entries = 3;
-    //ioctl(fd, GHOST_IOC_ENTER_QUEUE, (int32_t*) &enter_queue);
     close(q_fd);
     close(fd);
 
     param.sched_priority = 0;
     sched_setscheduler(pid_num, 10, &param);
-    //system(command);
-    //while (1) 
-    //  ;
 }

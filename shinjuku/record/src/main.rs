@@ -1,18 +1,3 @@
-//#![feature(lang_items)]
-//#![feature(concat_idents)]
-//#![feature(allocator_api)]
-//#![feature(alloc_error_handler)]
-//#![feature(alloc_layout_extra)]
-//#![feature(panic_info_message)]
-//#![feature(rustc_private)]
-//#![allow(improper_ctypes)]
-//#![feature(const_btree_new)]
-//#![no_std]
-
-//extern crate alloc;
-//extern crate bento;
-//extern crate spin;
-
 #[macro_use]
 extern crate nix;
 extern crate memmap;
@@ -25,31 +10,6 @@ use std::{thread, time};
 use std::io::Write;
 
 use memmap::MmapOptions;
-
-//use bento::println;
-
-//use bento::bindings as c;
-//use bento::kernel::ffi;
-//use bento::kernel::raw;
-//use bento::scheduler_utils::*;
-//
-//use bento::std::ffi::OsStr;
-//use bento::kernel::kobj::CStr;
-//
-//use spin::RwLock;
-//
-//use enclave::LocalEnclave;
-//use ghost::Ghost;
-//use sched::BentoSched;
-//
-//use alloc::collections::vec_deque::VecDeque;
-//use alloc::collections::btree_map::BTreeMap;
-//
-//use core::mem;
-//use core::str;
-//use core::fmt::Debug;
-//
-//use ringbuffer::RingBuffer;
 
 #[repr(C)]
 pub struct bento_ioc_create_queue {
@@ -88,14 +48,12 @@ const BENTO_IOC_TYPE_RECORD: u8 = 12;
 ioctl_readwrite!(bento_create_record, BENTO_IOC_MAGIC, BENTO_IOC_TYPE_RECORD, bento_ioc_create_queue);
 
 fn main() {
-    //env_logger::init();
     let replay_name_arg = env::args_os().nth(1).unwrap();
     let replay_name = replay_name_arg.into_string().unwrap();
     println!("replay file name {}", replay_name);
     let mut f = File::create(replay_name).unwrap();
 
     let mut options = OpenOptions::new();
-    //let agent_file = options.read(true).write(true).open("/sys/fs/ghost/enclave_10/ctl").unwrap();
     let agent_file = options.read(true).write(true).open("/sys/fs/ghost/ctl").unwrap();
     let mut create_queue = bento_ioc_create_queue {
         elems: 32,
@@ -126,54 +84,7 @@ fn main() {
             f.write(msg.as_bytes());
             f.write("\n".as_bytes());
         } else {
-        //println!("got {:?}", msg);
-        //if msg_ret.is_none() {
             thread::sleep(second);
         }
     }
-    //let replay_arg_str = format!("fsname={}", disk_name.to_str().unwrap());
-    //let replay_arg = fsname_arg_str.as_str();
 }
-
-//#[no_mangle]
-//pub fn rust_main(record_file: *const i8) {
-//        //println!("Hello from Rust");
-////}
-////impl bento::KernelModule for BentoGhostModule {
-////    fn init() -> Result<Self, i32> {
-//        println!("Hello from Rust");
-//        println!("record_file {}", record_file as u64);
-//        unsafe {
-//            let name = unsafe { CStr::from_raw(record_file as *const raw::c_char) };
-//            let name_str = OsStr::new(str::from_utf8(name.to_bytes_with_nul()).unwrap());
-//            println!("file {:?}", name_str.to_str());
-//        //println!("record_file {}", *record_file);
-//        //println!("record_file {}", *record_file.offset(1));
-//        BENTO_SCHED.q = Some(RwLock::new(VecDeque::new()));
-//        BENTO_SCHED.map = Some(RwLock::new(BTreeMap::new()));
-//        BENTO_SCHED.user_q = Some(RwLock::new(None));
-//        BENTO_SCHED.register(record_file);
-//        //let this_mod = BentoGhostModule {};
-//        //Ok(this_mod)
-//        }
-//    //}
-//}
-//
-//#[no_mangle]
-//pub fn rust_exit() {
-////impl Drop for BentoGhostModule {
-//    //fn drop(&mut self) {
-//        unsafe {
-//        println!("Saying goodbye from Rust");
-//        BENTO_SCHED.unregister();
-//        println!("Goodbye from Rust");
-//        }
-//    //}
-//}
-
-//bento::kernel_module!(
-//    BentoGhostModule,
-//    author: b"Bento Contributors",
-//    description: b"kernel module to replace the scheduler",
-//    license: b"GPL"
-//);

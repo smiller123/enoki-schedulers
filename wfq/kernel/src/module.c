@@ -15,21 +15,17 @@
 char __morestack[1024];
 char _GLOBAL_OFFSET_TABLE_;
 
-static char record_file[100] = "";
-module_param_string(record_file, record_file, 100, 0400);
-MODULE_PARM_DESC(record_file, "File name of record-replay file");
-
 void abort(void)
 {
     BUG();
 }
 
-extern void rust_main(char *);
+extern void rust_main(void);
 extern void rust_exit(void);
 
 static int xv6fs_init(void)
 {
-    rust_main(record_file);
+    rust_main();
     return 0;
 }
 

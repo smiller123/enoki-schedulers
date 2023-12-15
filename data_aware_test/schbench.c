@@ -155,31 +155,23 @@ static struct option long_options[] = {
 
 void enqueue(struct queue *q, struct sched_msg msg) {
 	struct sched_msg *ptr = (void *)q + q->offset;
-	//printf("ptr start %p\n", ptr);
 	uint32_t index = q->head & (q->capacity - 1);
 	ptr += index;
-	//printf("ptr curr %p\n", ptr);
 	ptr->tid = msg.tid;
 	ptr->hint = msg.hint;
 
-	//printf("ptr tid %d, ptr hint %d \n", ptr->tid, ptr->hint);
 	q->head += 1;
-    //msg = (struct sched_msg *)((void *)map_region + q->offset);
 }
 
 struct sched_msg dequeue(struct queue *q) {
     struct sched_msg msg;
 	struct sched_msg *ptr = (void *)q + q->offset;
-	//printf("ptr start %p\n", ptr);
 	uint32_t index = q->tail & (q->capacity - 1);
 	ptr += index;
-	//printf("ptr curr %p\n", ptr);
 	q->tail += 1;
-	//printf("ptr tid %d, ptr hint %d \n", ptr->tid, ptr->hint);
 	msg.tid = ptr->tid;
 	msg.hint = ptr->hint;
 	return msg;
-    //msg = (struct sched_msg *)((void *)map_region + q->offset);
 }
 
 

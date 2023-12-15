@@ -1,5 +1,5 @@
 [package]
-name = "bento-ghost-record"
+name = "enoki-data-record"
 version = "0.1.0"
 authors = ["Danyang Zhuo <danyangz@cs.washington.edu>",
            "Kaiyuan Zhang <kaiyuanz@cs.washington.edu>",

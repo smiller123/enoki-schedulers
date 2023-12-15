@@ -1,5 +1,3 @@
-//extern thread_priority;
-
 use std::thread;
 use thread_priority::*;
 use std::time::{Duration, Instant};
@@ -10,7 +8,6 @@ fn main() {
     for j in 0..5 {
         if j == 0 {
             let handle = thread::Builder::new()
-                //.spawn(move || {
                 .spawn_with_priority(ThreadPriority::Min, move |result| {
                 println!("result {:?}", result);
                 if j == 0 {
@@ -32,9 +29,6 @@ fn main() {
             handles.push(handle);
         } else {
             let handle = thread::spawn(move || {
-                //if j == 0 {
-                //    set_current_thread_priority(ThreadPriority::Min);
-                //}
                 let start = Instant::now();
                 let mut val = 0;
                 for _i in 0..u32::MAX/10 {

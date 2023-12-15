@@ -44,7 +44,6 @@ void enqueue(struct queue *q, struct sched_msg msg) {
 
 	printf("ptr tid %d, ptr hint %d \n", ptr->tid, ptr->hint);
 	q->head += 1;
-    //msg = (struct sched_msg *)((void *)map_region + q->offset);
 }
 
 struct sched_msg dequeue(struct queue *q) {
@@ -59,7 +58,6 @@ struct sched_msg dequeue(struct queue *q) {
 	msg.tid = ptr->tid;
 	msg.hint = ptr->hint;
 	return msg;
-    //msg = (struct sched_msg *)((void *)map_region + q->offset);
 }
 
 
@@ -97,12 +95,9 @@ int main(int argc, char *argv[]) {
     	fd = open("/sys/fs/ghost/enclave_10/ctl", O_RDWR);
     	printf("errno %d\n", errno);
     	q_fd = ioctl(fd, GHOST_IOC_CREATE_QUEUE, (int32_t*) &create_queue);
-    	//q_fd = ioctl(fd, GHOST_IOC_CREATE_REV_QUEUE, (int32_t*) &create_queue);
     	printf("mapsize %d\n", create_queue.mapsize);
     	printf("q_fd %d\n", q_fd);
 
-    	// TODO: figure out what to make this second argument. It NEEDS to be
-    	// greater than 0
     	map_region = mmap(0, create_queue.mapsize, PROT_READ | PROT_WRITE, MAP_SHARED, q_fd, 0);
 
     	printf("errno %d\n", errno);
@@ -114,13 +109,6 @@ int main(int argc, char *argv[]) {
     	printf("q head %d\n", q->head);
     	printf("q tail %d\n", q->tail);
     	msg = *((struct sched_msg *)((void *)map_region + q->offset));
-    	//msg.tid = p1_tids[0];
-	//msg.hint = 1;
-    	//q->head += 1;
-    	//while (q->head == 0) {
-        	//sleep(1);
-    	//}
-    	//msg = dequeue(q);
     	printf("msg tid %d, msg hint %d\n", msg.tid, msg.hint);
 	
 	msg.tid = (uint32_t) p1_tids[0];
@@ -129,8 +117,6 @@ int main(int argc, char *argv[]) {
     	msg.tid = (uint32_t) p2_tids[0];
 	msg.hint = 2;
     	enqueue(q, msg);
-    	// msg.val = 30;
-    	// enqueue(q, msg);
 
     	enter_queue.entries = 2;
     	ioctl(fd, GHOST_IOC_ENTER_QUEUE, (int32_t*) &enter_queue);
@@ -145,25 +131,6 @@ int main(int argc, char *argv[]) {
 	// the data_aware_sched
 	param.sched_priority = 0;
 	sched_setscheduler(pid_num, 10, &param);
-
-        // Allocate stack for child
-        //stack = malloc(STACK_SIZE);
-        //if (stack == NULL) {
-                 //perror("malloc");
-                 //exit(EXIT_FAILURE);
-        //}
-        //stack_top = stack + STACK_SIZE;
-
-	//pid_t p1_tids[1];
-	//pid_t p2_tids[1];
-
-	//// TODO: if this pid is reserved, change it out
-	//p1_tids[0] = 22000;
-	//p2_tids[1] = 23000;
-
-
-	// TODO: set up user messages queue to tell the scheduler
-	// to schedule the two child processes on the same core
 
 	struct clone_args p1_args = {
 		.flags = flags,
@@ -229,8 +196,6 @@ int main(int argc, char *argv[]) {
 	}
 
 	printf("Parent done\n");
-
-	//free(stack);
 
 	return 0;
 }

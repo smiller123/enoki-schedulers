@@ -19,12 +19,6 @@ fn main() {
         handles.push(handle);
     }
     while let Some(thread) = handles.pop() {
-        //let pthread = thread.as_pthread_t();
-        //unsafe {
-        //    let mut set: libc::cpu_set_t = std::mem::zeroed();
-        //    libc::CPU_SET(4, &mut set);
-        //    libc::pthread_setaffinity_np(pthread, std::mem::size_of::<libc::cpu_set_t>(), &set);
-        //}
         thread.join().unwrap();
     }
 }

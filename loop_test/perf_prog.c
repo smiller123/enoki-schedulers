@@ -15,7 +15,6 @@ main ()
     struct sched_param param;
     int pid_num = 0;
     char command[100];
-    //strcpy(command, "cargo run");
     strcpy(command, "./target/debug/loop_test");
 
     param.sched_priority = 0;

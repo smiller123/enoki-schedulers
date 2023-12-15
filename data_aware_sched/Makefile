@@ -12,12 +12,12 @@ all:
 
 kernel:
 	cp src/* kernel/src
-	touch kernel/.bento_ghost.rust.o.cmd
+	touch kernel/.enoki_data.rust.o.cmd
 	$(MAKE) -C $(KDIR) M=$(CURDIR)/kernel CC=$(CC) CONFIG_CC_IS_CLANG=y
 
 kernel-record:
 	cp src/* kernel-record/src
-	touch kernel-record/.bento_ghost.rust.o.cmd
+	touch kernel-record/.enoki_data.rust.o.cmd
 	$(MAKE) -C $(KDIR) M=$(CURDIR)/kernel-record CC=$(CC) CONFIG_CC_IS_CLANG=y
 
 record:

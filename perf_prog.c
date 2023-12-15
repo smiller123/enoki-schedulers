@@ -30,7 +30,6 @@ void enqueue(struct queue *q, struct sched_msg msg) {
 	ptr->val = msg.val;
 	printf("ptr val %d\n", ptr->val);
 	q->head += 1;
-    //msg = (struct sched_msg *)((void *)map_region + q->offset);
 }
 
 struct sched_msg dequeue(struct queue *q) {
@@ -44,7 +43,6 @@ struct sched_msg dequeue(struct queue *q) {
 	printf("ptr val %d\n", ptr->val);
 	msg.val = ptr->val;
 	return msg;
-    //msg = (struct sched_msg *)((void *)map_region + q->offset);
 }
 
 main ()

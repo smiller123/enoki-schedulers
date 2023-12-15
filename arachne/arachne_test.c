@@ -50,7 +50,6 @@ void enqueue(struct queue *q, struct send_msg msg) {
 	ptr->prio6 = msg.prio6;
 	ptr->prio7 = msg.prio7;
 	q->head += 1;
-    //msg = (struct sched_msg *)((void *)map_region + q->offset);
 }
 
 struct rcv_msg dequeue(struct queue *q) {
@@ -63,7 +62,6 @@ struct rcv_msg dequeue(struct queue *q) {
 	q->tail += 1;
 	msg.reclaim = ptr->reclaim;
 	return msg;
-    //msg = (struct sched_msg *)((void *)map_region + q->offset);
 }
 
 void *thread(void *arg) {
@@ -94,7 +92,6 @@ void *thread(void *arg) {
     int pid_num = 0;
     param.sched_priority = 0;
     sched_setscheduler(pid_num, 10, &param);
-    //sleep(1);
     pthread_yield();
     printf("thread says hi\n");
     while(1) {
@@ -106,15 +103,12 @@ void *thread(void *arg) {
     }
     pthread_exit(arg);
     printf("thread says hi2\n");
-    //system(command);
 }
 
 main ()
 {
     struct sched_param param;
     int pid_num = 0;
-    //char command[100];
-    //strcpy(command, "perf bench sched pipe");
     int fd;
     struct bento_ioc_create_queue create_queue;
     struct bento_ioc_create_queue create_queue2;
@@ -136,7 +130,6 @@ main ()
     fd = open("/sys/fs/ghost/enclave_10/ctl", O_RDWR);
     printf("errno %d\n", errno);
     q_fd = ioctl(fd, GHOST_IOC_CREATE_QUEUE, (int32_t*) &create_queue);
-    //q_fd = ioctl(fd, GHOST_IOC_CREATE_REV_QUEUE, (int32_t*) &create_queue);
     printf("mapsize %d\n", create_queue.mapsize);
     printf("q_fd %d\n", q_fd);
 
@@ -149,14 +142,6 @@ main ()
     printf("q capacity %d\n", q->capacity);
     printf("q head %d\n", q->head);
     printf("q tail %d\n", q->tail);
-    /////msg = (struct sched_msg *)((void *)map_region + q->offset);
-    //////msg->val = 10;
-    //////q->head += 1;
-    ////while (q->head == 0) {
-    ////	sleep(1);
-    ////}
-    ////msg = dequeue(q);
-    ////printf("msg val %d\n", msg.val);
 
     msg.pid = (uint32_t) getpid();
     msg.prio0 = 1;
@@ -168,10 +153,6 @@ main ()
     msg.prio6 = 0;
     msg.prio7 = 0;
     enqueue(q, msg);
-    //msg.val = 20;
-    //enqueue(q, msg);
-    //msg.val = 30;
-    //enqueue(q, msg);
 
     enter_queue.entries = 1;
     enter_queue.id = create_queue.id;
@@ -181,7 +162,6 @@ main ()
     create_queue2.flags = 0;
     create_queue2.mapsize = 0;
 
-    //q_fd2 = ioctl(fd, GHOST_IOC_CREATE_QUEUE, (int32_t*) &create_queue2);
     q_fd2 = ioctl(fd, GHOST_IOC_CREATE_REV_QUEUE, (int32_t*) &create_queue2);
     printf("mapsize %d\n", create_queue2.mapsize);
     printf("q_fd %d\n", q_fd2);
@@ -195,29 +175,6 @@ main ()
     printf("q capacity %d\n", q2->capacity);
     printf("q head %d\n", q2->head);
     printf("q tail %d\n", q2->tail);
-    //////msg = (struct sched_msg *)((void *)map_region + q->offset);
-    //////msg->val = 10;
-    //////q->head += 1;
-    //while (q->head == 0) {
-    //	sleep(1);
-    //}
-    //msg = dequeue(q);
-    //printf("msg val %d\n", msg.val);
-
-    //msg2.val = 102;
-    //enqueue(q2, msg2);
-    //msg2.val = 202;
-    //enqueue(q2, msg2);
-    //msg2.val = 302;
-    //enqueue(q2, msg2);
-
-    //enter_queue2.entries = 3;
-    //enter_queue2.id = create_queue2.id;
-    //ioctl(fd, GHOST_IOC_ENTER_QUEUE, (int32_t*) &enter_queue2);
-    ////ioctl(fd, EKIBEN_IOC_SEND_HINT, (int32_t*) &msg);
-    //close(q_fd2);
-    //close(q_fd);
-    //close(fd);
 
     param.sched_priority = 0;
     pthread_t thid;
@@ -230,12 +187,6 @@ main ()
     pthread_t thid8;
     pthread_create(&thid, NULL, thread, &fd);
     pthread_create(&thid2, NULL, thread, &fd);
-    //pthread_create(&thid3, NULL, thread, "hi");
-    //pthread_create(&thid4, NULL, thread, "hi");
-    //pthread_create(&thid5, NULL, thread, "hi");
-    //pthread_create(&thid6, NULL, thread, "hi");
-    //pthread_create(&thid7, NULL, thread, "hi");
-    //pthread_create(&thid8, NULL, thread, "hi");
     printf("made thread\n");
 
     sleep(5);
@@ -271,31 +222,9 @@ main ()
     ioctl(fd, GHOST_IOC_ENTER_QUEUE, (int32_t*) &enter_queue);
 
     sleep(5);
-    msg.pid = (uint32_t) getpid();
-    msg.prio0 = 2;
-    msg.prio1 = 0;
-    msg.prio2 = 0;
-    msg.prio3 = 0;
-    msg.prio4 = 0;
-    msg.prio5 = 0;
-    msg.prio6 = 0;
-    msg.prio7 = 0;
-    enqueue(q, msg);
-
-    enter_queue.entries = 1;
-    enter_queue.id = create_queue.id;
-    ioctl(fd, GHOST_IOC_ENTER_QUEUE, (int32_t*) &enter_queue);
 
     void *ret;
     pthread_join(thid, &ret);
     pthread_join(thid2, &ret);
-    //pthread_join(thid3, &ret);
-    //pthread_join(thid4, &ret);
-    //pthread_join(thid5, &ret);
-    //pthread_join(thid6, &ret);
-    //pthread_join(thid7, &ret);
-    //pthread_join(thid8, &ret);
     printf("joined thread\n");
-    //sched_setscheduler(pid_num, 10, &param);
-    //system(command);
 }

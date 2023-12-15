@@ -20,12 +20,12 @@ kernel:
 
 upgrade:
 	cp src/* upgrade/src
-	touch upgrade/.bento_ghost2.rust.o.cmd
+	touch upgrade/.enoki_wfq2.rust.o.cmd
 	$(MAKE) -C $(KDIR) M=$(CURDIR)/upgrade CC=$(CC) CONFIG_CC_IS_CLANG=y
 
 kernel-record:
 	cp src/* kernel-record/src
-	touch kernel-record/.bento_ghost.rust.o.cmd
+	touch kernel-record/.enoki_wfq.rust.o.cmd
 	$(MAKE) -C $(KDIR) M=$(CURDIR)/kernel-record CC=$(CC) CONFIG_CC_IS_CLANG=y
 
 record:
